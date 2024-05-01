@@ -1,0 +1,29 @@
+A(A1, a2, a3, b1)
+    
+F(F1, F2, f3)
+
+G(G1)
+
+rAFG(a1, F1, f2, g1)
+    a1:FK(A)
+    F1:FK(F)
+    g2:FK(F) NOT NULL
+    g1:FK(G) UNIQUE
+
+H(H1, h2)
+
+E(E1, E2)
+
+rCE(rce1, A1, e1, e2)
+    A1:FK(A)
+    e1:FK(E)
+    e2:FK(E)
+
+rHrAFG(A1, F1, F2, G1, H1)
+    A1:FK(rAFG)
+    F1:FK(rAFG)
+    F2:FK(rAFG)
+    G1:FK(rAFG)
+    H1:FK(H)
+
+
