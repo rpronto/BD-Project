@@ -1,5 +1,13 @@
-A(A1, a2, a3, b1)
-    
+A(A1, a2, a3)
+
+B(A1, b1)
+    A1:FK(A)
+
+C(A1)
+    A1:FK(A)
+
+IC-1: cada A1 em A deve ocorrer em B ou C mas não em ambos
+
 F(F1, F2, f3)
 
 G(G1)
@@ -15,7 +23,7 @@ H(H1, h2)
 E(E1, E2)
 
 rCE(rce1, A1, e1, e2)
-    A1:FK(A)
+    A1:FK(C)
     e1:FK(E)
     e2:FK(E)
 
