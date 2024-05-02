@@ -1,0 +1,7 @@
+medicamento com atributo nome
+sist de saude cm entidade fraca
+setas 
+relacao paciente enfermeiro - presta servicos
+setas sobrepostas :(
+paciente e medico so numa consulta de cada vez
+paciente numa so consulta e num so servico de enfermagem
