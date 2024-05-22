@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION paciente_diff_medico() RETURNS TRIGGER AS $$
 			RAISE EXCEPTION 'Um médico não pode ter uma consulta consigo mesmo';
 		END IF;
 		RETURN NEW;
-END;
+    END;
 $$LANGUAGE plpgsql;
 
 CREATE OR REPLACE TRIGGER paciente_diff_medico_trigger BEFORE INSERT OR UPDATE ON consulta
@@ -30,15 +30,28 @@ CREATE OR REPLACE TRIGGER paciente_diff_medico_trigger BEFORE INSERT OR UPDATE O
 
 -- RI 3
 
--- este está a dar erro :'(
-CREATE OR REPLACE TRIGGER medico_em_clinica() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION medico_em_clinica() RETURNS TRIGGER AS $$
+    DECLARE dia_semana_consulta SMALLINT;
+    DECLARE dia_semana_trabalho SMALLINT;
+
     BEGIN 
-        IF (NEW.WEEKDAY(data) <> (SELECT dia_da_semana FROM trabalha WHERE nif = NEW.nif AND nome = NEW.nome)) THEN 
+        -- gets weekday of the appointment date
+        SELECT EXTRACT(DOW FROM NEW.data) INTO dia_semana_consulta; 
+        
+        -- Extract the weekday name from the appointment date
+        SELECT dia_da_semana INTO dia_semana_trabalho
+            FROM trabalha 
+            WHERE nif = NEW.nif AND nome = NEW.nome 
+                AND dia_da_semana = dia_semana_consulta;
+
+        -- If no matching record is found, raise an exception
+        IF NOT FOUND THEN 
             RAISE EXCEPTION 'O médico não trabalha nesta clínica neste dia';
         END IF;
+
         RETURN NEW;
     END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE TRIGGER medico_em_clinica_trigger BEFORE INSERT OR UPDATE ON consulta
     FOR EACH ROW EXECUTE FUNCTION medico_em_clinica();
@@ -61,7 +74,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER medico_em_clinica_trigger1 BEFORE INSERT OR UPDATE ON consulta
+CREATE OR REPLACE TRIGGER medico_em_clinica_trigger1 BEFORE INSERT OR UPDATE ON consulta
     FOR EACH ROW EXECUTE FUNCTION medico_em_clinica1();
 
 
