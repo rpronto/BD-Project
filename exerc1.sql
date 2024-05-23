@@ -26,8 +26,6 @@ CREATE OR REPLACE TRIGGER paciente_diff_medico_trigger BEFORE INSERT OR UPDATE O
 
 
 
-
-
 -- RI 3
 
 CREATE OR REPLACE FUNCTION medico_em_clinica() RETURNS TRIGGER AS $$
@@ -36,9 +34,11 @@ CREATE OR REPLACE FUNCTION medico_em_clinica() RETURNS TRIGGER AS $$
 
     BEGIN 
         -- gets weekday of the appointment date
+        -- dow --> sunday = 1, monday = 2
         SELECT EXTRACT(DOW FROM NEW.data) INTO dia_semana_consulta; 
-        
+
         -- Extract the weekday name from the appointment date
+        -- in trabalha monday = 0
         SELECT dia_da_semana INTO dia_semana_trabalho
             FROM trabalha 
             WHERE nif = NEW.nif AND nome = NEW.nome 
@@ -66,7 +66,7 @@ BEGIN
         FROM trabalha
         WHERE nif = NEW.nif  -- certifica que e o mm medico
         AND nome = NEW.nome -- certifica que e a mm clinica
-        AND dia_da_semana = WEEKDAY(NEW.data)
+        AND dia_da_semana = EXTRACT(DOW FROM NEW.data)
     ) THEN
         RAISE EXCEPTION 'O médico não trabalha nesta clínica neste dia';
     END IF;
