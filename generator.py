@@ -346,38 +346,35 @@ def gerar_consultas_receitas(pacientes, medicos, clinicas, start_date, end_date,
                 if consultas_por_clinica >= 20:
                     break
 
-    # for paciente in pacientes:
-    #     if not any(paciente[0] == consulta[1] for consulta in consultas): # if paciente doesnt have any consulta yet
-    #         consulta_date = start_date + timedelta(days=random.randint(0, delta_days))
-    #         day_of_week = (data.isoweekday()) % 7
+    for paciente in pacientes:
+        if not any(paciente[0] == consulta[1] for consulta in consultas): # if paciente doesnt have any consulta yet
+            consulta_date = start_date + timedelta(days=random.randint(0, delta_days))
+            day_of_week = (data.isoweekday()) % 7
+            hora = generate_time()
 
-    #         # Filtra trabalha por dia da semana
-    #         trabalha_dia = []
-
-    #         for item in trabalha:
-    #             if item[2] == day_of_week and item not in trabalha_dia:
-    #                 trabalha_dia.append(item)
+            # Filtra trabalha por dia da semana
+            trabalha_dia = []
+            for item in trabalha:
+                if item[2] == day_of_week and item not in trabalha_dia:
+                    trabalha_dia.append(item)
             
-    #         # Seleciona um trabalha aleatório
-    #         trabalha_item = random.choice(trabalha_dia)
+            # Seleciona um trabalha aleatório
+            trabalha_item = random.choice(trabalha_dia)
+            medico = trabalha_item[0]
 
-    #         medico = trabalha_item[0]
+            while paciente[0] == medico or ((consulta_date, hora) in patient_schedule[paciente[0]]) \
+                or ((consulta_date, hora) in doctor_schedule[medico]):
+                trabalha_item = random.choice(trabalha_dia)
+                medico = trabalha_item[0]
+                hora = generate_time()
 
-    #         if paciente[0] == medico or (data, hora) in doctor_schedule[medico]:  
-    #             continue
+            patient_schedule[paciente[0]].add((consulta_date, hora))
+            doctor_schedule[medico].add((consulta_date, hora))
 
-    #         time = generate_time().strftime('%H:%M:%S')
-
-    #         while ((paciente[0], date, time) in unique_ssn_marcacao or (medico[0], date, time) in unique_nif_marcacao):
-    #             time = generate_time().strftime('%H:%M:%S')
-
-    #         consulta = (len(consultas) + 1, paciente[0], medico[0], trabalha_item[1],
-    #                     consulta_date.strftime('%Y-%m-%d'), time, generate_codigo_sns())
-    #         print("INSERT INTO consulta VALUES ", consulta, ';')
+            consulta = (len(consultas) + 1, paciente[0], medico[0], trabalha_item[1],
+                        consulta_date.strftime('%Y-%m-%d'), time.strftime('%H:%M:%S'), generate_codigo_sns())
     
-    #         consultas.append(consulta)
-
-
+            consultas.append(consulta)
 
     return consultas, receitas
 
