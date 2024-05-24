@@ -20,13 +20,19 @@ def clean_text(text):
     text = ''.join(e for e in text if e.isalnum() or e.isspace())  # Keep alphanumeric and space characters only
     return text
 
+def clean_morada(text):
+    text = unidecode(text)  # Remove accents and other diacritics
+    allowed_chars = set(string.ascii_letters + string.digits + string.whitespace + ",.-")
+    text = ''.join(e for e in text if e in allowed_chars)  # Keep alphanumeric, space, and specific punctuation characters only
+    return text
+
 # Function to generate random clinic data
 def generate_clinic_data(num_entries):
     clinic_data = []
     for _ in range(num_entries):
         nome = fake.company()
         telefone = fake.unique.numerify(text='#########')  
-        morada = f'{fake.street_name()}, {fake.building_number()} {fake.postcode()}, {fake.random_element(lisbon_neighborhoods)}'
+        morada = f'{fake.street_name()}, {fake.building_number()} {fake.postcode()} {fake.random_element(lisbon_neighborhoods)}'
         clinic_data.append((nome, telefone, morada))
     return clinic_data
 
@@ -37,8 +43,8 @@ def generate_nurse_data(clinic_name, num_nurses):
         nif = fake.unique.numerify(text='#########')  # Generates a 9-digit number
         nome = fake.unique.name()
         telefone = fake.unique.numerify(text='#########') 
-        morada = f'{fake.street_name()}, {fake.building_number()} {fake.postcode()}, {fake.city()}'
-        nurse_data.append((nif, nome, telefone,morada, clinic_name))
+        morada = fake.address().replace('\n', ' ')
+        nurse_data.append((nif, nome, telefone, morada, clinic_name))
     return nurse_data
 
 # Function to generate random doctor data
@@ -50,7 +56,7 @@ def generate_doctor_data(num_doctors):
         nif = fake.unique.numerify(text='#########')  # Generates a 9-digit number
         nome = fake.unique.name()
         telefone = fake.unique.numerify(text='#########') 
-        morada = f'{fake.street_name()}, {fake.building_number()} {fake.postcode()}, {fake.city()}'
+        morada = fake.address().replace('\n', ' ')
         if i < 20:
             especialidade = "clínica geral"
         else:
@@ -93,6 +99,10 @@ def generate_works_data(medicos, clinicas):
 
     return trabalha
 
+
+#########################################################
+#########################################################
+## morada dos pacientes n tem codigo postal correto
 def generate_patient_data(num_entries):
     pacientes = []
     for _ in range(num_entries):
@@ -100,9 +110,10 @@ def generate_patient_data(num_entries):
         nif = fake.unique.bothify(text='#########')
         nome = fake.name()
         telefone = fake.unique.bothify(text='#########')
-        morada = fake.address().replace('\n', ', ')
+        morada = fake.address().replace('\n', ' ')
+        # morada = f'{fake.street_name()} {fake.building_number()}, {fake.postcode()} {fake.city()}'
         data_nasc = fake.date_of_birth(minimum_age=0, maximum_age=100).strftime('%Y-%m-%d')
-        pacientes.append((ssn, nif, clean_text(nome), telefone, clean_text(morada), data_nasc))
+        pacientes.append((ssn, nif, clean_text(nome), telefone, clean_morada(morada), data_nasc))
     return pacientes
 
 
@@ -186,7 +197,6 @@ def gerar_consultas_receitas(pacientes, medicos, clinicas, start_date, end_date,
         data = (start_date + timedelta(days=day_offset)).date()
 
         # weekday --> monday = 0, sunday = 6
-
         # isoweekday --> monday = 1, sunday = 7
         # we want sunday = 0, monday = 1, ... saturday = 6
         
@@ -217,7 +227,7 @@ def gerar_consultas_receitas(pacientes, medicos, clinicas, start_date, end_date,
                         patient_schedule[paciente[0]].add((data, hora))
                         doctor_schedule[medico].add((data, hora))
 
-                        codigo_sns = fake.unique.bothify(text='############')
+                        codigo_sns = generate_codigo_sns()
                         consultas.append((consulta_id, paciente[0], medico, clinica[0], data.strftime('%Y-%m-%d'), hora.strftime('%H:%M:%S'), codigo_sns))
 
                         # ~80% das consultas têm receita
