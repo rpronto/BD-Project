@@ -1,0 +1,14 @@
+PRIMEIRA ALINEA - slide 20 parte II
+
+ver se keys no join sao PKs
+usar indice no filtro de parametro - > hash
+valor -> b-tree
+
+escolher apenas um dos ultimos, determinar qual é melhor (determinar seletividade)
+
+
+SEGUNDA ALINEA
+
+ver se keys no join sao PKs
+qtd no indice (slide 39)
+b-tree para data (??)
