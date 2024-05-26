@@ -1,14 +1,16 @@
-CREATE MATERIALIZED VIEW IF NOT EXISTS historial_paciente AS
+DROP MATERIALIZED VIEW IF EXISTS historial_paciente;
+
+CREATE MATERIALIZED VIEW historial_paciente AS
     SELECT 
         c.id, 
         c.ssn,
         c.nif, 
+        c.nome,
         c.data,
         EXTRACT(YEAR FROM c.data) AS ano,
         EXTRACT(MONTH FROM c.data) AS mes,
         EXTRACT(DAY FROM c.data) AS dia_do_mes,
         EXTRACT(DOW FROM c.data) AS dia_da_semana,
-
         SUBSTRING(clinic.morada FROM POSITION('[0-9]{4}-[0-9]{3},\s' IN clinic.morada)) AS localidade, -- clinica 
         m.especialidade, -- medico 
         'observacao' AS tipo, -- observacao
@@ -24,12 +26,12 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS historial_paciente AS
         c.id,
         c.ssn,
         c.nif, 
+        c.nome,
         c.data,
         EXTRACT(YEAR FROM c.data) AS ano,
         EXTRACT(MONTH FROM c.data) AS mes,
         EXTRACT(DAY FROM c.data) AS dia_do_mes,
         EXTRACT(DOW FROM c.data) AS dia_da_semana,
-        
         SUBSTRING(clinic.morada FROM POSITION('[0-9]{4}-[0-9]{3},\s' IN clinic.morada)) AS localidade, -- clinica 
         m.especialidade, -- medico 
         'receita' AS tipo, -- receita
@@ -40,3 +42,4 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS historial_paciente AS
         JOIN medico m USING(nif)
         JOIN clinica clinic ON c.nome = clinic.nome
         JOIN receita r USING(codigo_sns);
+
