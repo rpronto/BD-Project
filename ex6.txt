@@ -7,8 +7,60 @@ valor -> b-tree
 escolher apenas um dos ultimos, determinar qual é melhor (determinar seletividade)
 
 
+SELECT nome
+FROM paciente
+JOIN consulta USING (ssn)      --> ssn é PK em paciente mas não em consulta
+JOIN observacao USING (id)     --> id é PK em consulta e em obervação é PK (id, parametro)
+WHERE parametro = ‘pressão diastólica’  
+AND valor >= 9;
+
+----------------------------------------------------
+CREATE INDEX idx_consulta_ssn ON consulta USING HASH (ssn);
+--> A coluna 'ssn' é usada para fazer o JOIN entre a tabela 'paciente' e 'consulta'. Na tabela 'paciente' o atributo 'ssn' é PK e já tem índice implicito, no entanto,
+é bom garantir que na tabela 'consulta' também tenha um índice para o atributo 'ssn'. Utilizamos um índice do tipo HASH uma vez que é mais apropriado para seleção por 
+igualdade, como operações JOIN, optimizando assim esta operação.
+
+--> Como 'id' é PK em 'consulta' e faz parte da chave composta de 'observacao', nomeadamente tem como PK ('id', 'parametro'), desta forma já têm um índice implicito para 'id',
+não havendo necessidade de criar um índice para 'id'.
+
+CREATE INDEX idx_observacao_parametro_valor ON observacao(valor); 
+
+ --> Como já foi criado implicitamente o índice composto ('id','parametro') por ser uma PK composta, seria um pouco redundante criar novamente um índice para o atributo
+ 'parametro' com o atributo 'valor', o que levaria a ocupação de mais memória, ainda para mais tendo em conta que o "tamanho das tabelas excede a memória disponível em 
+ várias ordens de magnitude." Desta forma cria-se apenas um índice para 'valor' o que irá otimizar a operação valor >= 9. Utiliza-se um índice do tipo B-tree por ser 
+ mais eficiente para operações do tipo range. Para além disso 'valor' é um atributo que pode sofrer alterações recorrentemente e os índices B-tree permitem caso haja
+ inserções ou remoções de registos na tabela, atualizar o índice facilmente apenas com pequenas alterações locais.
+----------------------------------------------------
+
+
+
 SEGUNDA ALINEA
 
 ver se keys no join sao PKs
 qtd no indice (slide 39)
 b-tree para data (??)
+
+SELECT especialidade, SUM(quantidade) AS qtd
+FROM medico
+JOIN consulta USING (nif)                --> nif é PK em médico mas não em consulta
+JOIN receita USING (codigo_ssn)          --> em receita é PK composta (codigo_ssn, medicamento)
+WHERE data BETWEEN ‘2023-01-01’ AND ‘2023-12-31’        --> data está em consulta
+GROUP BY especialidade                                  --> especialidade está em médico
+SORT BY qtd;                                            --> quantidade está em receita
+
+
+CREATE INDEX idx_consulta_nif ON consulta USING HASH (nif);
+--> A coluna 'nif' é usada para fazer a operação de JOIN entre a tabela 'medico' e 'consulta'. Na tabela 'medico' o atributo 'nif' é PK e já tem índice implicito, no
+entanto, é bom garantir que na tabela 'consulta' também tenho um índice para o atributo 'nif'. Utilizamos um índice do tipo HASH uma vez que é mais apropriado para
+seleção por igualdade, como operações JOIN, optimizando assim esta operação.
+
+--> Como em receita, ('codigo_ssn', 'medicamento') é PK composta, já existe um índice implicito para o par ('codigo_ssn', 'medicamento'), desta forma não há necessidade
+de criar um novo índice.
+
+CREATE INDEX idx_consulta_data ON consulta(data);
+--> De forma a otimizar a operação de "data BETWEEN ‘2023-01-01’ AND ‘2023-12-31’" é criado um índice para o atributo 'data' na tabela 'consulta'. O índice é do tipo
+B-tree, sendo o mais indicado para consultas do tipo range tal como aquela que é realizada na query.
+
+CREATE INDEX idx_medico_especialidade ON medico USING HASH (especialidade);
+--> Para otimizar a operação de "GROUP BY especialidade" é criado um índice para o atributo 'especialidade' na tabela 'medico'. O índice é do tipo HASH uma vez que a 
+operação GROUP BY utilizada igualdade para agrupar linhas com valores iguais e desta forma o tupo de índice HASH é o mais indicado.
