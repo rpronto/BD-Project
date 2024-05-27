@@ -235,16 +235,22 @@ def register_consulta(clinica):
 
 
 
-@app.route('/a/<clinica>/cancelar/', methods=("POST",))
+@app.route('/a/<clinica>/cancelar/', methods=("DELETE",))
 def cancel_consulta(clinica):
 
+    codigo_sns = request.json.get("codigo_sns")
+    id = request.json.get("id")
     paciente = request.json.get("paciente")
     medico = request.json.get("medico")
     data_consulta = request.json.get("data")
     hora_consulta = request.json.get("hora")
 
     error = None
-    if not paciente:
+    if not codigo_sns:
+        error = "Codigo_sns is required."
+    elif not id:
+         error = "Id is required."
+    elif not paciente:
          error = "Paciente is required."
     elif not medico:
          error = "Medico is required."
@@ -270,6 +276,20 @@ def cancel_consulta(clinica):
         with psycopg.connect(conninfo=DATABASE_URL) as conn:
             with conn.cursor(row_factory=namedtuple_row) as cur:
                 try:
+                    cur.execute(
+                        '''
+                        DELETE FROM receita 
+                        WHERE codigo_sns = %s
+                        ''', 
+                        (codigo_sns,)
+                    )
+                    cur.execute(
+                        '''
+                        DELETE FROM observacao 
+                        WHERE id = %s
+                        ''', 
+                        (id,)
+                    )
                     cur.execute(
                         '''
                         DELETE FROM consulta 
