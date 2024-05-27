@@ -97,3 +97,32 @@ SELECT DISTINCT
 FROM 
     consecutivos;
 
+-- 3
+--global
+SELECT
+    chave AS medicamento,
+    SUM(valor) AS total_medicamentos
+FROM 
+    historial_paciente
+WHERE 
+    EXTRACT(YEAR FROM c.data) = 2023
+    AND tipo = 'receita'
+GROUP BY
+    ROLLUP(medicamento);
+
+
+-- global vs localidade vs clinica
+SELECT
+    localidade,
+    nome,
+    chave AS medicamento,
+    SUM(valor) AS total_medicamentos
+FROM
+    historial_paciente
+JOIN
+    clinica ON historial_paciente.nome = clinica.nome
+WHERE
+    EXTRACT(YEAR FROM data) = 2023
+    AND tipo = 'receita'
+GROUP BY
+    ROLLUP(localidade, clinica, medicamento);
