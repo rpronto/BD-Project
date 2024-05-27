@@ -124,7 +124,10 @@ WHERE
     EXTRACT(YEAR FROM data) = 2023
     AND tipo = 'receita'
 GROUP BY
-    GROUPING SETS ((mes), (dia_do_mes), ());
+    GROUPING SETS ((mes), (dia_do_mes), ())
+ORDER BY
+    CASE WHEN mes IS NULL THEN 1 ELSE 0 END, mes,
+    CASE WHEN dia_do_mes IS NULL THEN 1 ELSE 0 END, dia_do_mes;
 
 -- global vs especialidade vs nome_do_medico
 SELECT
@@ -140,3 +143,5 @@ WHERE
     AND tipo = 'receita'
 GROUP BY
     GROUPING SETS ((view_especialidade), (nome_medico), ());
+
+-- 4
