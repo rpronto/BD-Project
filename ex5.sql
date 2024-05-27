@@ -98,31 +98,21 @@ FROM
     consecutivos;
 
 -- 3
---global
-SELECT
-    chave AS medicamento,
-    SUM(valor) AS total_medicamentos
-FROM 
-    historial_paciente
-WHERE 
-    EXTRACT(YEAR FROM c.data) = 2023
-    AND tipo = 'receita'
-GROUP BY
-    ROLLUP(medicamento);
-
-
 -- global vs localidade vs clinica
 SELECT
     localidade,
-    nome,
-    chave AS medicamento,
+    c.nome AS view_nome_clinica,
     SUM(valor) AS total_medicamentos
 FROM
-    historial_paciente
+    historial_paciente c
 JOIN
-    clinica ON historial_paciente.nome = clinica.nome
+    clinica USING(nome)
 WHERE
     EXTRACT(YEAR FROM data) = 2023
     AND tipo = 'receita'
 GROUP BY
-    ROLLUP(localidade, clinica, medicamento);
+    GROUPING SETS ((localidade), (view_nome_clinica), ());
+
+-- global vs mes vs dia_do_mes
+
+-- global vs especialidade vs nome_do_medico
