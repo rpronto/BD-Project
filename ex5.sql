@@ -79,6 +79,7 @@ WHERE
     meses_receitados = 12
 ORDER BY 
     medicamento;
+    
 -- 3
 -- global vs localidade vs clinica
 SELECT
