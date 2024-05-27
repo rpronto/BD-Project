@@ -144,13 +144,13 @@ WHERE
 GROUP BY
     GROUPING SETS ((view_especialidade), (nome_medico), ());
 
--- 4
+-- 4  "isto está mal"
 WITH metricas AS (
     SELECT 
         medico.especialidade,
         medico.nome AS nome_medico,
         clinic.nome AS nome_clinica,
-        o.parametro,
+        o.chave AS parametro,
         o.valor
     FROM 
         historial_paciente o
