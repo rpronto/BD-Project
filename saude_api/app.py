@@ -97,6 +97,33 @@ def round_up_to_next_half_hour(dt):
 
     return dt
 
+def get_next_day(dt):
+    return dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+
+def check_medico_trabalha_em_clinica(clinica, nif, data):
+
+    dia_semana = (data.isoweekday()) % 7
+
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM medico m
+                JOIN trabalha t USING(nif)
+                WHERE m.nif = %s
+                AND t.nome = %s
+                AND t.dia_da_semana = %s;
+                """,
+                (nif, clinica, dia_semana),
+            )
+            if cur.fetchone() is None:
+                return False
+            return True
+        
+
+
 
 @app.route("/c/<clinica>/<especialidade>/", methods=("GET",))
 def list_medicos(clinica, especialidade):
@@ -130,6 +157,11 @@ def list_medicos(clinica, especialidade):
                     hora = rounded_time.time()
                     data = rounded_time.date()
                     
+                    while not check_medico_trabalha_em_clinica(clinica, medico_nif, data):
+                        rounded_time = get_next_day(rounded_time)
+                        hora = rounded_time.time()
+                        data = rounded_time.date()
+
                     cur.execute(
                         """
                         SELECT 1
@@ -140,11 +172,13 @@ def list_medicos(clinica, especialidade):
                         """,
                         (medico_nif, data, hora),
                     )
+                    # se n houver consulta nessa hora 
                     if cur.fetchone() is None:
                         count -= 1
                         if medico_nome not in result:
                             result[medico_nome] = []
                         result[medico_nome].append({'data': str(data), 'hora': str(hora)})
+                    # update hora
                     rounded_time = round_up_to_next_half_hour(rounded_time)
 
     return jsonify(result)
