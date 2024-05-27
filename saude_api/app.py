@@ -147,7 +147,7 @@ def generate_codigo_sns():
                 cur.execute(
                     """
                     SELECT 1
-                    FROM consulta c
+                    FROM consulta c 
                     WHERE c.codigo_sns = %(codigo)s;
                     """,
                     {"codigo": codigo_sns}
