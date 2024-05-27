@@ -7,7 +7,7 @@ from logging.config import dictConfig
 import psycopg
 from flask import Flask, jsonify, request
 from psycopg.rows import namedtuple_row
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import string
 
@@ -80,38 +80,72 @@ def list_especialidades(clinica):
 
 
 
-#### agr ta a retornar as 3as consultas do medico
-#### fazer current date? e obter 3 proximos horarios disponiveis
+### problema: temos de verificar qual o proximo dia em que o medico trabalha neste dia
+def round_up_to_next_half_hour(dt):
+    # Se os minutos são 0-29, arredonda para a meia hora seguinte
+    # Se os minutos são 30-59, arredonda para a próxima hora
+    if dt.minute < 30:
+        dt = dt.replace(minute=30, second=0, microsecond=0)
+    else:
+        dt = dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+
+    # Ajuste para fora do horário de trabalho
+    if dt.hour >= 19:
+        dt = dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    elif dt.hour >= 13:
+        dt = dt.replace(hour=14, minute=0, second=0, microsecond=0)
+
+    return dt
+
+
 @app.route("/c/<clinica>/<especialidade>/", methods=("GET",))
 def list_medicos(clinica, especialidade):
+
+    result = {}
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
+            # vai buscar medicos que trabalham na clinica com essa especialidade
             medicos = cur.execute(
                 """
-                SELECT m.nome, c.data, c.hora 
+                SELECT DISTINCT m.nome, m.nif
                 FROM medico m
                 JOIN trabalha t ON m.nif = t.nif
-                LEFT JOIN consulta c ON m.nif = c.nif
-                WHERE t.nome = %s AND m.especialidade = %s AND (c.data IS NULL OR c.data > CURRENT_DATE)
-                ORDER BY c.data, c.hora;
+                JOIN consulta c ON m.nif = c.nif
+                WHERE t.nome = %s 
+                AND m.especialidade = %s;
                 """,
-
                 (clinica, especialidade),
             ).fetchall()
             log.debug(f"Found {cur.rowcount} rows.")
 
-    result = {}
-    for row in medicos:
-        nome_medico = row[0]  # Acessando pelo índice da tupla
-        if nome_medico not in result:
-            result[nome_medico] = []
+            for medico in medicos:
+                hora_atual = datetime.now()
+                rounded_time = round_up_to_next_half_hour(hora_atual)
 
-        # Adicionar apenas os primeiros três horários disponíveis
-        if len(result[nome_medico]) < 3 and row[1] and row[2]:  # Acessando pelo índice da tupla
-            result[nome_medico].append({
-                'data': str(row[1]),  # Acessando pelo índice da tupla
-                'hora': str(row[2])   # Acessando pelo índice da tupla
-            })
+                medico_nome = medico[0]
+                medico_nif = medico[1]
+                count = 3
+
+                while count > 0:
+                    hora = rounded_time.time()
+                    data = rounded_time.date()
+                    
+                    cur.execute(
+                        """
+                        SELECT 1
+                        FROM consulta c
+                        WHERE c.nif = %s
+                        AND c.data = %s
+                        AND c.hora = %s;
+                        """,
+                        (medico_nif, data, hora),
+                    )
+                    if cur.fetchone() is None:
+                        count -= 1
+                        if medico_nome not in result:
+                            result[medico_nome] = []
+                        result[medico_nome].append({'data': str(data), 'hora': str(hora)})
+                    rounded_time = round_up_to_next_half_hour(rounded_time)
 
     return jsonify(result)
 
@@ -238,18 +272,13 @@ def register_consulta(clinica):
 @app.route('/a/<clinica>/cancelar/', methods=("DELETE",))
 def cancel_consulta(clinica):
 
-    # codigo_sns = request.json.get("codigo_sns")
-    # id = request.json.get("id")
     paciente = request.json.get("paciente")
     medico = request.json.get("medico")
     data_consulta = request.json.get("data")
     hora_consulta = request.json.get("hora")
 
     error = None
-    # if not codigo_sns:
-    #     error = "Codigo_sns is required."
-    # if not id:
-    #      error = "Id is required."
+    
     if not paciente:
          error = "Paciente is required."
     elif not medico:
@@ -288,7 +317,7 @@ def cancel_consulta(clinica):
                         ''', 
                         (paciente, medico, clinica, data_consulta, hora_consulta)
                     ).fetchone()
-                    if codigo_sns is None:
+                    if codigo_sns is None or id is None:
                         return jsonify({'status': 'error', 'message': 'Consulta não encontrada ou já cancelada.'}), 404
 
                     cur.execute(
