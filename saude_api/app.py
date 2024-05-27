@@ -238,19 +238,19 @@ def register_consulta(clinica):
 @app.route('/a/<clinica>/cancelar/', methods=("DELETE",))
 def cancel_consulta(clinica):
 
-    codigo_sns = request.json.get("codigo_sns")
-    id = request.json.get("id")
+    # codigo_sns = request.json.get("codigo_sns")
+    # id = request.json.get("id")
     paciente = request.json.get("paciente")
     medico = request.json.get("medico")
     data_consulta = request.json.get("data")
     hora_consulta = request.json.get("hora")
 
     error = None
-    if not codigo_sns:
-        error = "Codigo_sns is required."
-    elif not id:
-         error = "Id is required."
-    elif not paciente:
+    # if not codigo_sns:
+    #     error = "Codigo_sns is required."
+    # if not id:
+    #      error = "Id is required."
+    if not paciente:
          error = "Paciente is required."
     elif not medico:
          error = "Medico is required."
@@ -276,6 +276,21 @@ def cancel_consulta(clinica):
         with psycopg.connect(conninfo=DATABASE_URL) as conn:
             with conn.cursor(row_factory=namedtuple_row) as cur:
                 try:
+                    codigo_sns, id = cur.execute(
+                        '''
+                        SELECT codigo_sns, id
+                        FROM consulta 
+                        WHERE ssn = %s 
+                        AND nif = %s 
+                        AND nome = %s
+                        AND data = %s 
+                        AND hora = %s
+                        ''', 
+                        (paciente, medico, clinica, data_consulta, hora_consulta)
+                    ).fetchone()
+                    if codigo_sns is None:
+                        return jsonify({'status': 'error', 'message': 'Consulta não encontrada ou já cancelada.'}), 404
+
                     cur.execute(
                         '''
                         DELETE FROM receita 
