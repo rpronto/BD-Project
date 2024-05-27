@@ -59,7 +59,6 @@ def list_clinicas():
     return jsonify(clinicas)
 
 
-
 @app.route("/c/<clinica>/", methods=("GET",))
 def list_especialidades(clinica):
     """Show specialities in clinica."""
@@ -81,9 +80,10 @@ def list_especialidades(clinica):
 
 
 
+#### agr ta a retornar as 3as consultas do medico
+#### fazer current date? e obter 3 proximos horarios disponiveis
 @app.route("/c/<clinica>/<especialidade>/", methods=("GET",))
 def list_medicos(clinica, especialidade):
-
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             medicos = cur.execute(
@@ -135,7 +135,6 @@ def is_valid_date(data):
             return False
     except ValueError:
         return False
-
 
 
 def generate_codigo_sns():
@@ -200,8 +199,12 @@ def register_consulta(clinica):
     if (not is_valid_date(data_consulta)):
         error = "Formato data de consulta incorreto."
 
+    consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
+    if consulta_datetime <= datetime.now():
+        error = "A consulta deve ser marcada para um momento futuro."
+
     if error is not None:
-        return error, 400
+        return jsonify({'status': 'error', 'message': error}), 400
     else:
         id = get_next_consulta_id()
         codigo_sns = generate_codigo_sns()
@@ -209,7 +212,6 @@ def register_consulta(clinica):
         with psycopg.connect(conninfo=DATABASE_URL) as conn:
             with conn.cursor(row_factory=namedtuple_row) as cur:
                 try:
-                    
                     cur.execute(
                         """
                         INSERT INTO consulta (id, ssn, nif, nome, data, hora, codigo_sns)
@@ -233,32 +235,59 @@ def register_consulta(clinica):
 
 
 
+@app.route('/a/<clinica>/cancelar/', methods=("POST",))
+def cancel_consulta(clinica):
 
+    paciente = request.json.get("paciente")
+    medico = request.json.get("medico")
+    data_consulta = request.json.get("data")
+    hora_consulta = request.json.get("hora")
 
+    error = None
+    if not paciente:
+         error = "Paciente is required."
+    elif not medico:
+         error = "Medico is required."
+    elif not data_consulta:
+        error = "Data de consulta is required."
+    elif not hora_consulta:
+        error = "Hora de consulta is required."
 
+    if (not is_valid_hour(hora_consulta)):
+        error = "Formato hora de consulta incorreto."
 
+    if (not is_valid_date(data_consulta)):
+        error = "Formato data de consulta incorreto."
 
-@app.route("/accounts/<account_number>/delete", methods=("POST",))
-def account_delete(account_number):
-    """Delete the account."""
+    consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
+    if consulta_datetime <= datetime.now():
+        error = "A consulta deve ser marcada para um momento futuro."
 
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                DELETE FROM account
-                WHERE account_number = %(account_number)s;
-                """,
-                {"account_number": account_number},
-            )
-        conn.commit()
-    return "", 204
+    if error is not None:
+        return jsonify({'status': 'error', 'message': error}), 400
+    
+    else:
+        with psycopg.connect(conninfo=DATABASE_URL) as conn:
+            with conn.cursor(row_factory=namedtuple_row) as cur:
+                try:
+                    cur.execute(
+                        '''
+                        DELETE FROM consulta 
+                        WHERE ssn = %s 
+                        AND nif = %s 
+                        AND nome = %s
+                        AND data = %s 
+                        AND hora = %s
+                        ''', 
+                        (paciente, medico, clinica, data_consulta, hora_consulta)
+                    )
+                    conn.commit()
+                    response = {'status': 'success', 'message': 'Consulta cancelada com sucesso.'}
+                except Exception as e:
+                    cur.execute('ROLLBACK')
+                    response = {'status': 'error', 'message': f'Erro ao cancelar consulta: {str(e)}'}
 
-
-@app.route("/ping", methods=("GET",))
-def ping():
-    log.debug("ping!")
-    return jsonify({"message": "pong!", "status": "success"})
+    return jsonify(response)
 
 
 if __name__ == "__main__":
