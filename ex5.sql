@@ -144,67 +144,38 @@ WHERE
 GROUP BY
     GROUPING SETS ((view_especialidade), (nome_medico), ());
 
--- 4  "isto está mal"
+-- 4  
 WITH metricas AS (
     SELECT 
-        medico.especialidade,
+        c.nome AS nome_clinica,
+        c.especialidade AS especialidade_medico,
         medico.nome AS nome_medico,
-        clinic.nome AS nome_clinica,
-        o.chave AS parametro,
-        o.valor
+        chave AS parametro,
+        valor
     FROM 
-        historial_paciente o
+        historial_paciente c
     JOIN 
-        medico ON o.nif = medico.nif
-    JOIN 
-        clinica clinic ON o.nome = clinic.nome
+        medico USING(nif)
     WHERE 
         o.valor IS NOT NULL
-), metricas_medico AS (
-    SELECT 
-        especialidade,
-        nome_medico,
-        parametro,
-        AVG(valor) AS media,
-        STDDEV(valor) AS desvio_padrao
-    FROM 
-        metricas
-    GROUP BY 
-        especialidade,
-        nome_medico,
-        parametro
-), metricas_clinica AS (
-    SELECT 
-        especialidade,
-        nome_medico,
-        nome_clinica,
-        parametro,
-        AVG(valor) AS media,
-        STDDEV(valor) AS desvio_padrao
-    FROM 
-        metricas
-    GROUP BY 
-        especialidade,
-        nome_medico,
-        nome_clinica,
-        parametro
+        AND tipo = 'observacao'
 )
 SELECT 
-    especialidade,
-    nome_medico,
-    NULL AS nome_clinica,
-    parametro,
-    media AS media_global,
-    desvio_padrao AS desvio_padrao_global
-FROM 
-    metricas_medico
-UNION ALL
-SELECT 
-    especialidade,
+    especialidade_medico,
     nome_medico,
     nome_clinica,
     parametro,
-    media AS media_clinica,
-    desvio_padrao AS desvio_padrao_clinica
+    AVG(valor) AS media_valor,
+    STDDEV(valor) AS desvio_padrao_valor
 FROM 
-    metricas_clinica;
+    metricas
+GROUP BY 
+    GROUPING SETS (
+        (parametro, especialidade_medico, nome_medico),
+        (parametro, especialidade_medico, nome_clinica)
+    )
+ORDER BY 
+    especialidade_medico,
+    nome_medico,
+    nome_clinica,
+    parametro;
