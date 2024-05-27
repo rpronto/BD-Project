@@ -157,7 +157,7 @@ WITH metricas AS (
     JOIN 
         medico USING(nif)
     WHERE 
-        o.valor IS NOT NULL
+        c.valor IS NOT NULL
         AND tipo = 'observacao'
 )
 SELECT 
