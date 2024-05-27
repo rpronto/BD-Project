@@ -49,3 +49,30 @@ ORDER BY
     m.max_intervalo DESC;
 
 -- 2
+
+WITH medicamentos_cardiologia AS (
+    SELECT 
+        c.ssn,
+        c.data,
+        chave AS medicamento
+    FROM
+        historial_paciente c
+    WHERE 
+        c.especialidade = 'cardiologia'
+        AND c.tipo = 'receita'
+), medicamentos_mensais AS (
+    SELECT 
+        ssn,
+        medicamento, 
+        DATE_TRUNC('month', data) AS mes_ano,
+        COUNT(DISTINCT DATE_TRUNC('month', data)) OVER (PARTITION BY ssn, medicamento ORDER BY DATE_TRUNC('month', data) ROWS BETWEEN 11 PRECEDING AND CURRENT ROW) AS meses_consecutivos
+    FROM
+        medicamentos_cardiologia
+)
+SELECT DISTINCT
+    medicamento
+FROM 
+    medicamentos_mensais
+WHERE
+    meses_consecutivos = 12;
+
