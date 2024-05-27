@@ -50,53 +50,35 @@ ORDER BY
 
 -- 2
 
-WITH medicamentos_cardiologia AS (
+WITH consultas_cardiologia AS (
     SELECT 
         ssn,
         DATE_TRUNC('month', data) AS mes_ano,
         chave AS medicamento
     FROM
-        historial_paciente
+        historial_paciente c
     WHERE 
         especialidade = 'cardiologia'
         AND tipo = 'receita'
-), meses_consecutivos AS (
-    SELECT
-        ssn,
-        medicamento,
-        mes_ano,
-        ROW_NUMBER() OVER (PARTITION BY ssn, medicamento ORDER BY mes_ano) AS mes_seq,
-        DATE_TRUNC('month', mes_ano) AS mes_trunc
-    FROM
-        medicamentos_cardiologia
-), diferencas AS (
-    SELECT
-        ssn,
-        medicamento,
-        mes_trunc,
-        mes_seq,
-        mes_trunc - INTERVAL '1 month' * (mes_seq - 1) AS diff
-    FROM
-        meses_consecutivos
-), consecutivos AS (
-    SELECT
-        ssn,
-        medicamento,
-        COUNT(*) AS total_consecutivos
-    FROM
-        diferencas
-    GROUP BY
-        ssn,
-        medicamento,
-        diff
-    HAVING
-        COUNT(*) >= 12
+        AND c.data >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
+), medicamentos_mensais AS (
+    SELECT 
+        ssn, 
+        medicamento, 
+        COUNT(DISTINCT mes_ano) AS meses_receitados
+    FROM 
+        consultas_cardiologia
+    GROUP BY 
+        ssn, medicamento
 )
-SELECT DISTINCT
-    medicamento
+SELECT 
+    DISTINCT medicamento
 FROM 
-    consecutivos;
-
+    medicamentos_mensais
+WHERE 
+    meses_receitados = 12
+ORDER BY 
+    medicamento;
 -- 3
 -- global vs localidade vs clinica
 SELECT
