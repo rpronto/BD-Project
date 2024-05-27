@@ -52,27 +52,48 @@ ORDER BY
 
 WITH medicamentos_cardiologia AS (
     SELECT 
-        c.ssn,
-        c.data,
+        ssn,
+        DATE_TRUNC('month', data) AS mes_ano,
         chave AS medicamento
     FROM
-        historial_paciente c
+        historial_paciente
     WHERE 
-        c.especialidade = 'cardiologia'
-        AND c.tipo = 'receita'
-), medicamentos_mensais AS (
-    SELECT 
+        especialidade = 'cardiologia'
+        AND tipo = 'receita'
+), meses_consecutivos AS (
+    SELECT
         ssn,
-        medicamento, 
-        DATE_TRUNC('month', data) AS mes_ano,
-        COUNT(DISTINCT DATE_TRUNC('month', data)) OVER (PARTITION BY ssn, medicamento ORDER BY DATE_TRUNC('month', data) ROWS BETWEEN 11 PRECEDING AND CURRENT ROW) AS meses_consecutivos
+        medicamento,
+        mes_ano,
+        ROW_NUMBER() OVER (PARTITION BY ssn, medicamento ORDER BY mes_ano) AS mes_seq,
+        DATE_TRUNC('month', mes_ano) AS mes_trunc
     FROM
         medicamentos_cardiologia
+), diferencas AS (
+    SELECT
+        ssn,
+        medicamento,
+        mes_trunc,
+        mes_seq,
+        mes_trunc - INTERVAL '1 month' * (mes_seq - 1) AS diff
+    FROM
+        meses_consecutivos
+), consecutivos AS (
+    SELECT
+        ssn,
+        medicamento,
+        COUNT(*) AS total_consecutivos
+    FROM
+        diferencas
+    GROUP BY
+        ssn,
+        medicamento,
+        diff
+    HAVING
+        COUNT(*) >= 12
 )
 SELECT DISTINCT
     medicamento
 FROM 
-    medicamentos_mensais
-WHERE
-    meses_consecutivos = 12;
+    consecutivos;
 
