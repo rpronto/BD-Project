@@ -114,5 +114,29 @@ GROUP BY
     GROUPING SETS ((localidade), (view_nome_clinica), ());
 
 -- global vs mes vs dia_do_mes
+SELECT
+    mes,
+    dia_do_mes,
+    SUM(valor) AS total_medicamentos
+FROM
+    historial_paciente
+WHERE
+    EXTRACT(YEAR FROM data) = 2023
+    AND tipo = 'receita'
+GROUP BY
+    GROUPING SETS ((mes), (dia_do_mes), ());
 
 -- global vs especialidade vs nome_do_medico
+SELECT
+    c.especialidade AS view_especialidade,
+    medico.nome AS nome_medico,
+    SUM(valor) AS total_medicamentos
+FROM
+    historial_paciente c
+JOIN
+    medico USING(nif)
+WHERE
+    EXTRACT(YEAR FROM data) = 2023
+    AND tipo = 'receita'
+GROUP BY
+    GROUPING SETS ((view_especialidade), (nome_medico), ());
