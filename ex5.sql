@@ -81,56 +81,148 @@ ORDER BY
     medicamento;
     
 -- 3
+
+SELECT * FROM
+    (SELECT
+        chave,
+        localidade,
+        c.nome AS nome_clinica,
+        SUM(valor) AS total_medicamentos
+    FROM historial_paciente c JOIN clinica USING(nome)
+    WHERE
+        ano = 2023 AND tipo = 'receita'
+    GROUP BY
+        GROUPING SETS ((chave), (localidade, chave), (localidade, nome_clinica, chave), ())
+    ) AS localidade_clinica
+FULL JOIN
+    (SELECT
+        chave,
+        mes,
+        dia_do_mes,
+        SUM(valor) AS total_medicamentos
+    FROM
+        historial_paciente
+    WHERE
+        ano = 2023 AND tipo = 'receita'
+    GROUP BY
+        GROUPING SETS ((chave), (mes, chave), (mes, dia_do_mes, chave), ())
+    ) AS mes_dia_do_mes
+USING(chave)   
+FULL JOIN
+    (SELECT
+        chave,
+        c.especialidade AS esp,
+        medico.nome AS nome_m,
+        SUM(valor) AS total_medicamentos
+    FROM 
+        historial_paciente c JOIN medico USING(nif)
+    WHERE 
+        ano = 2023 AND tipo = 'receita'
+    GROUP BY
+        GROUPING SETS ((chave), (esp, chave), (esp, nome_m, chave), ())
+    ) AS especialidade_nome_medico
+USING(chave);
+
+
+
+--WITH quantidades_receitadas AS (
+--    SELECT
+--        c.localidade,
+--        c.nome AS view_nome_clinica,
+--        SUM(c.valor) AS total_medicamentos,
+--        EXTRACT(MONTH FROM c.data) AS mes,
+--        EXTRACT(DAY FROM c.data) AS dia_do_mes,
+--        c.especialidade AS view_especialidade,
+--        m.nome AS nome_medico
+--    FROM 
+--        historial_paciente c
+--    JOIN
+--        clinica cl ON c.nome = cl.nome
+--    JOIN
+--        medico m ON c.nif = m.nif
+--    WHERE
+--        EXTRACT(YEAR FROM c.data) = 2023
+--        AND c.tipo = 'receita'
+--    GROUP BY
+--        c.localidade, c.nome, c.especialidade, m.nome, EXTRACT(MONTH FROM c.data), EXTRACT(DAY FROM c.data)
+--)
+--SELECT
+--    localidade,
+--    view_nome_clinica,
+--    mes,
+--    dia_do_mes,
+--    view_especialidade,
+--    nome_medico,
+--    SUM(total_medicamentos) AS total_medicamentos
+--FROM
+--    quantidades_receitadas
+--GROUP BY
+--    GROUPING SETS (
+--        (),
+--        (localidade),
+--        (localidade, view_nome_clinica),
+--        (mes),
+--        (mes, dia_do_mes),
+--        (view_especialidade),
+--        (view_especialidade, nome_medico)
+--    )
+--ORDER BY
+--    CASE WHEN mes IS NULL THEN 1 ELSE 0 END, mes,
+--    CASE WHEN dia_do_mes IS NULL THEN 1 ELSE 0 END, dia_do_mes;
+
+
     -- global vs localidade vs clinica
-SELECT
-    localidade,
-    c.nome AS view_nome_clinica,
-    SUM(valor) AS total_medicamentos
-FROM
-    historial_paciente c
-JOIN
-    clinica USING(nome)
-WHERE
-    EXTRACT(YEAR FROM data) = 2023
-    AND tipo = 'receita'
-GROUP BY
-    GROUPING SETS ((localidade), (view_nome_clinica), ());
+--SELECT
+--    localidade,
+--    c.nome AS view_nome_clinica,
+--    SUM(valor) AS total_medicamentos
+--FROM
+--    historial_paciente c
+--JOIN
+--    clinica USING(nome)
+--WHERE
+--    EXTRACT(YEAR FROM data) = 2023
+--    AND tipo = 'receita'
+--GROUP BY
+--    GROUPING SETS ((localidade), (view_nome_clinica), ());
+--
+---- global vs mes vs dia_do_mes
+--
+---- mudado para ter mes e dias por mes 
+--
+--SELECT
+--    mes,
+--    dia_do_mes,
+--    SUM(valor) AS total_medicamentos
+--FROM
+--    historial_paciente
+--WHERE
+--    EXTRACT(YEAR FROM data) = 2023
+--    AND tipo = 'receita'
+--GROUP BY
+--    GROUPING SETS (
+--        (mes),
+--        (mes, dia_do_mes), ())
+--ORDER BY
+--    CASE WHEN mes IS NULL THEN 1 ELSE 0 END, mes,
+--    CASE WHEN dia_do_mes IS NULL THEN 1 ELSE 0 END, dia_do_mes;
+--
+---- global vs especialidade vs nome_do_medico
+--SELECT
+--    c.especialidade AS view_especialidade,
+--    medico.nome AS nome_medico,
+--    SUM(valor) AS total_medicamentos
+--FROM
+--    historial_paciente c
+--JOIN
+--    medico USING(nif)
+--WHERE
+--    EXTRACT(YEAR FROM data) = 2023
+--    AND tipo = 'receita'
+--GROUP BY
+--    GROUPING SETS ((view_especialidade), (nome_medico), ());
 
--- global vs mes vs dia_do_mes
 
--- mudado para ter mes e dias por mes 
-
-SELECT
-    mes,
-    dia_do_mes,
-    SUM(valor) AS total_medicamentos
-FROM
-    historial_paciente
-WHERE
-    EXTRACT(YEAR FROM data) = 2023
-    AND tipo = 'receita'
-GROUP BY
-    GROUPING SETS (
-        (mes),
-        (mes, dia_do_mes), ())
-ORDER BY
-    CASE WHEN mes IS NULL THEN 1 ELSE 0 END, mes,
-    CASE WHEN dia_do_mes IS NULL THEN 1 ELSE 0 END, dia_do_mes;
-
--- global vs especialidade vs nome_do_medico
-SELECT
-    c.especialidade AS view_especialidade,
-    medico.nome AS nome_medico,
-    SUM(valor) AS total_medicamentos
-FROM
-    historial_paciente c
-JOIN
-    medico USING(nif)
-WHERE
-    EXTRACT(YEAR FROM data) = 2023
-    AND tipo = 'receita'
-GROUP BY
-    GROUPING SETS ((view_especialidade), (nome_medico), ());
 
 -- 4  
 
