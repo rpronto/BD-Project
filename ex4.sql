@@ -11,7 +11,7 @@ CREATE MATERIALIZED VIEW historial_paciente AS
         EXTRACT(MONTH FROM c.data) AS mes,
         EXTRACT(DAY FROM c.data) AS dia_do_mes,
         EXTRACT(DOW FROM c.data) AS dia_da_semana,
-        SUBSTRING(clinic.morada FROM POSITION('[0-9]{4}-[0-9]{3},\s' IN clinic.morada)) AS localidade, -- clinica 
+        REGEXP_REPLACE(clinic.morada, '.* [0-9]{4}-[0-9]{3} ', '') AS localidade,
         m.especialidade, -- medico 
         'observacao' AS tipo, -- observacao
         o.parametro AS chave, 
@@ -21,7 +21,7 @@ CREATE MATERIALIZED VIEW historial_paciente AS
         JOIN medico m USING(nif)
         JOIN clinica clinic ON c.nome = clinic.nome
         JOIN observacao o USING(id)
-    UNION ALL 
+    UNION
     SELECT 
         c.id,
         c.ssn,
@@ -32,7 +32,7 @@ CREATE MATERIALIZED VIEW historial_paciente AS
         EXTRACT(MONTH FROM c.data) AS mes,
         EXTRACT(DAY FROM c.data) AS dia_do_mes,
         EXTRACT(DOW FROM c.data) AS dia_da_semana,
-        SUBSTRING(clinic.morada FROM POSITION('[0-9]{4}-[0-9]{3},\s' IN clinic.morada)) AS localidade, -- clinica 
+        REGEXP_REPLACE(clinic.morada, '.* [0-9]{4}-[0-9]{3} ', '') AS localidade,
         m.especialidade, -- medico 
         'receita' AS tipo, -- receita
         r.medicamento AS chave, 
