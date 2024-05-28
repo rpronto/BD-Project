@@ -41,7 +41,6 @@ log = app.logger
 
 
 @app.route("/", methods=("GET",))
-@app.route("/clinicas", methods=("GET",))
 def list_clinicas():
     ''' Show all clinics '''
 
