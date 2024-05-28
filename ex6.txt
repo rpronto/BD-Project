@@ -9,9 +9,9 @@ escolher apenas um dos ultimos, determinar qual é melhor (determinar seletivida
 
 SELECT nome
 FROM paciente
-JOIN consulta USING (ssn)      --> ssn é PK em paciente mas não em consulta
-JOIN observacao USING (id)     --> id é PK em consulta e em obervação é PK (id, parametro)
-WHERE parametro = ‘pressão diastólica’  
+JOIN consulta USING (ssn)    --> ssn é PK em paciente mas não em consulta  
+JOIN observacao USING (id)   --> id é PK em consulta e em obervação é PK (id, parametro)
+WHERE parametro = 'pressão diastólica'  
 AND valor >= 9;
 
 ----------------------------------------------------
@@ -21,17 +21,18 @@ CREATE INDEX idx_consulta_ssn ON consulta USING HASH (ssn);
 igualdade, como operações JOIN, optimizando assim esta operação.
 
 --> Como 'id' é PK em 'consulta' e faz parte da chave composta de 'observacao', nomeadamente tem como PK ('id', 'parametro'), desta forma já têm um índice implicito para 'id',
-não havendo necessidade de criar um índice para 'id'.
+não havendo necessidade de criar um índice para 'id', portanto a otimização da operação de JOIN observacao USING (id) já beneficia implicitamente da existência do indice composto
+('id', 'parametro').
 
-CREATE INDEX idx_observacao_parametro_valor ON observacao(valor); 
+CREATE INDEX idx_observacao_parametro_valor ON observacao(parametro, valor);
 
- --> Como já foi criado implicitamente o índice composto ('id','parametro') por ser uma PK composta, seria um pouco redundante criar novamente um índice para o atributo
- 'parametro' com o atributo 'valor', o que levaria a ocupação de mais memória, ainda para mais tendo em conta que o "tamanho das tabelas excede a memória disponível em 
- várias ordens de magnitude." Desta forma cria-se apenas um índice para 'valor' o que irá otimizar a operação valor >= 9. Utiliza-se um índice do tipo B-tree por ser 
- mais eficiente para operações do tipo range. Para além disso 'valor' é um atributo que pode sofrer alterações recorrentemente e os índices B-tree permitem caso haja
- inserções ou remoções de registos na tabela, atualizar o índice facilmente apenas com pequenas alterações locais.
+ --> Apesar de já ter sido criado implicitamente o índice composto ('id','parametro') por ser uma PK composta, torna-se ainda vantajoso criar o indice composto ('parametro', 'valor').
+ A cláusula WHERE é executada depois das operações JOIN, portanto a operação WHERE não beneficia da existência índice composto ('id','parametro').
+ Desta forma, o indice composto ('parametro','valor') irá otimizar as operações de procura do atributo 'parametro' para a verificação da igualdade e posteriormente do atributo 'valor'
+ para a verificação de range otimizando assim esta operação. Foi verificado o beneficio do indice composto ('parametro','valor') vs indice ('valor') vs nenhum indice através da ferramenta
+ EXPLAIN ANALYZE onde se verificou uma melhoria no tempo de execução real quando utilizado o indice composto ('parametro','valor').
+  
 ----------------------------------------------------
-
 
 
 SEGUNDA ALINEA
