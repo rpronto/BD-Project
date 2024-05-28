@@ -36,7 +36,6 @@ valor_maximo AS (
     FROM
         max_intervalos
 )
-
 SELECT
     m.ssn
 FROM
@@ -61,7 +60,8 @@ WITH consultas_cardiologia AS (
         especialidade = 'cardiologia'
         AND tipo = 'receita'
         AND c.data >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
-), medicamentos_mensais AS (
+), 
+medicamentos_mensais AS (
     SELECT 
         ssn, 
         medicamento, 
@@ -81,7 +81,7 @@ ORDER BY
     medicamento;
     
 -- 3
--- global vs localidade vs clinica
+    -- global vs localidade vs clinica
 SELECT
     localidade,
     c.nome AS view_nome_clinica,
@@ -97,6 +97,9 @@ GROUP BY
     GROUPING SETS ((localidade), (view_nome_clinica), ());
 
 -- global vs mes vs dia_do_mes
+
+-- mudado para ter mes e dias por mes 
+
 SELECT
     mes,
     dia_do_mes,
@@ -107,7 +110,9 @@ WHERE
     EXTRACT(YEAR FROM data) = 2023
     AND tipo = 'receita'
 GROUP BY
-    GROUPING SETS ((mes), (dia_do_mes), ())
+    GROUPING SETS (
+        (mes),
+        (mes, dia_do_mes), ())
 ORDER BY
     CASE WHEN mes IS NULL THEN 1 ELSE 0 END, mes,
     CASE WHEN dia_do_mes IS NULL THEN 1 ELSE 0 END, dia_do_mes;
@@ -128,6 +133,8 @@ GROUP BY
     GROUPING SETS ((view_especialidade), (nome_medico), ());
 
 -- 4  
+
+-- mudado com drill down
 WITH metricas AS (
     SELECT 
         c.nome AS nome_clinica,
@@ -144,21 +151,23 @@ WITH metricas AS (
         AND tipo = 'observacao'
 )
 SELECT 
+    parametro,
     especialidade_medico,
     nome_medico,
     nome_clinica,
-    parametro,
     AVG(valor) AS media_valor,
     STDDEV(valor) AS desvio_padrao_valor
 FROM 
     metricas
 GROUP BY 
     GROUPING SETS (
-        (parametro, especialidade_medico, nome_medico),
-        (parametro, especialidade_medico, nome_clinica)
+        (),
+        (parametro, especialidade_medico),
+        (parametro, especialidade_medico,nome_medico),
+        (parametro, especialidade_medico, nome_medico, nome_clinica)
     )
 ORDER BY 
+    parametro,
     especialidade_medico,
     nome_medico,
-    nome_clinica,
-    parametro;
+    nome_clinica;
