@@ -79,32 +79,21 @@ GROUP BY ssn HAVING MAX(max_intervalo) >= ALL(
 
 -- 2
 -- ver teorica
-WITH consultas_cardiologia AS (
+SELECT DISTINCT medicamento
+FROM (
     SELECT 
         ssn,
-        DATE_TRUNC('month', data) AS mes_ano,
-        chave AS medicamento
+        chave AS medicamento,
+        COUNT(DISTINCT DATE_TRUNC('month', data)) AS meses_receitados
     FROM
-        historial_paciente c
+        historial_paciente
     WHERE 
         especialidade = 'cardiologia'
         AND tipo = 'receita'
-        AND c.data >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
-), 
-medicamentos_mensais AS (
-    SELECT 
-        ssn, 
-        medicamento, 
-        COUNT(DISTINCT mes_ano) AS meses_receitados
-    FROM 
-        consultas_cardiologia
+        AND data >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
     GROUP BY 
         ssn, medicamento
 )
-SELECT 
-    DISTINCT medicamento
-FROM 
-    medicamentos_mensais
 WHERE 
     meses_receitados = 12
 ORDER BY 
