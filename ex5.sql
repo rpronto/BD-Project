@@ -82,47 +82,87 @@ ORDER BY
     
 -- 3
 
-SELECT * FROM
-    (SELECT
-        chave,
+WITH medicamento_total AS (
+    SELECT 
+        chave AS medicamento,
+        valor AS quantidade,
         localidade,
         c.nome AS nome_clinica,
-        SUM(valor) AS total_medicamentos
-    FROM historial_paciente c JOIN clinica USING(nome)
-    WHERE
-        ano = 2023 AND tipo = 'receita'
-    GROUP BY
-        GROUPING SETS ((chave), (localidade, chave), (localidade, nome_clinica, chave), ())
-    ) AS localidade_clinica
-FULL JOIN
-    (SELECT
-        chave,
-        mes,
+        mes, 
         dia_do_mes,
-        SUM(valor) AS total_medicamentos
-    FROM
-        historial_paciente
-    WHERE
-        ano = 2023 AND tipo = 'receita'
-    GROUP BY
-        GROUPING SETS ((chave), (mes, chave), (mes, dia_do_mes, chave), ())
-    ) AS mes_dia_do_mes
-USING(chave)   
-FULL JOIN
-    (SELECT
-        chave,
         c.especialidade AS esp,
-        medico.nome AS nome_m,
-        SUM(valor) AS total_medicamentos
+        medico.nome AS nome_m
     FROM 
         historial_paciente c JOIN medico USING(nif)
     WHERE 
         ano = 2023 AND tipo = 'receita'
-    GROUP BY
-        GROUPING SETS ((chave), (esp, chave), (esp, nome_m, chave), ())
-    ) AS especialidade_nome_medico
-USING(chave);
+)
+SELECT 
+    medicamento,
+    localidade, 
+    nome_clinica,
+    mes,
+    dia_do_mes,
+    esp,
+    nome_m,
+    SUM(quantidade) AS total_quantidade
+FROM 
+    medicamento_total
+GROUP BY 
+    GROUPING SETS (
+        (medicamento),
+        (medicamento, localidade),
+        (medicamento, localidade, nome_clinica),
+        (medicamento, mes),
+        (medicamento, mes, dia_do_mes),
+        (medicamento, esp),
+        (medicamento, esp, nome_m),
+        ()
+    )
+ORDER BY 
+    medicamento, mes, dia_do_mes;
+    
 
+--SELECT * FROM
+--    (SELECT
+--        chave,
+--        localidade,
+--        c.nome AS nome_clinica,
+--        SUM(valor) AS total_medicamentos
+--    FROM historial_paciente c JOIN clinica USING(nome)
+--    WHERE
+--        ano = 2023 AND tipo = 'receita'
+--    GROUP BY
+--        GROUPING SETS ((chave), (chave, localidade), (chave, localidade, nome_clinica), ())
+--    ) AS localidade_clinica
+--FULL JOIN
+--    (SELECT
+--        chave,
+--        mes,
+--        dia_do_mes,
+--        SUM(valor) AS total_medicamentos
+--    FROM
+--        historial_paciente
+--    WHERE
+--        ano = 2023 AND tipo = 'receita'
+--    GROUP BY
+--        GROUPING SETS ((chave), (chave, mes), (chave, mes, dia_do_mes), ())
+--    ) AS mes_dia_do_mes
+--USING(chave)   
+--FULL JOIN
+--    (SELECT
+--        chave,
+--        c.especialidade AS esp,
+--        medico.nome AS nome_m,
+--        SUM(valor) AS total_medicamentos
+--    FROM 
+--        historial_paciente c JOIN medico USING(nif)
+--    WHERE 
+--        ano = 2023 AND tipo = 'receita'
+--    GROUP BY
+--        GROUPING SETS ((chave), (chave, esp), (chave, esp, nome_m), ())
+--    ) AS especialidade_nome_medico
+--USING(chave);
 
 
 --WITH quantidades_receitadas AS (
