@@ -1,26 +1,22 @@
 -- 1
-
 SELECT ssn
 FROM (
-    -- obtem ssn e max intervalos
     SELECT 
         ssn,
         MAX(proxima_data - data) AS max_intervalo
     FROM
         (SELECT 
-            c.ssn,
-            c.data,
-            LEAD(c.data) OVER (PARTITION BY c.ssn, c.chave ORDER BY c.data) AS proxima_data
+            ssn,
+            data,
+            LEAD(data) OVER (PARTITION BY ssn, chave ORDER BY data) AS proxima_data
         FROM 
-            historial_paciente c
+            historial_paciente
         WHERE
-            c.especialidade = 'ortopedia' AND c.tipo = 'observacao' AND c.valor IS NULL
+            especialidade = 'ortopedia' AND tipo = 'observacao' AND valor IS NULL
         )
-    WHERE
-        proxima_data IS NOT NULL
-    GROUP BY
-        ssn
-)
+    WHERE proxima_data is not NULL
+    GROUP BY ssn
+) 
 GROUP BY ssn HAVING MAX(max_intervalo) >= ALL(
     SELECT MAX(max_intervalo)
     FROM (
@@ -28,57 +24,19 @@ GROUP BY ssn HAVING MAX(max_intervalo) >= ALL(
             MAX(proxima_data - data) AS max_intervalo
         FROM
             (SELECT 
-                c.ssn,
-                c.data,
-                LEAD(c.data) OVER (PARTITION BY c.ssn, c.chave ORDER BY c.data) AS proxima_data
+                ssn,
+                data,
+                LEAD(data) OVER (PARTITION BY ssn, chave ORDER BY data) AS proxima_data
             FROM 
-                historial_paciente c
+                historial_paciente
             WHERE
-                c.especialidade = 'ortopedia' AND c.tipo = 'observacao' AND c.valor IS NULL
+                especialidade = 'ortopedia' AND tipo = 'observacao' AND valor IS NULL
             )
-        WHERE
-            proxima_data IS NOT NULL
-        GROUP BY
-            ssn
     )
 );
 
--- WITH max_intervalos AS (
---     SELECT 
---         ssn,
---         MAX(proxima_data - data) AS max_intervalo
---     FROM
---         (SELECT 
---             c.ssn,
---             c.data,
---             LEAD(c.data) OVER (PARTITION BY c.ssn, c.chave ORDER BY c.data) AS proxima_data
---         FROM 
---             historial_paciente c
---         WHERE
---             c.especialidade = 'ortopedia' AND c.tipo = 'observacao' AND c.valor IS NULL
---         )
---     WHERE
---         proxima_data IS NOT NULL
---     GROUP BY
---         ssn
---     ORDER BY    
---         max_intervalo DESC
--- ),
--- valor_maximo AS(
---     SELECT 
---         MAX(max_intervalo) AS valor_max
---     FROM 
---         max_intervalos
--- )
--- SELECT
---     m.ssn, max_intervalo
--- FROM
---     max_intervalos m JOIN valor_maximo v ON m.max_intervalo = v.valor_max;
-
-
 
 -- 2
--- ver teorica
 SELECT DISTINCT medicamento
 FROM (
     SELECT 
@@ -90,7 +48,7 @@ FROM (
     WHERE 
         especialidade = 'cardiologia'
         AND tipo = 'receita'
-        AND data >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
+        AND data >= DATE_TRUNC('day', NOW()) - INTERVAL '1 year'
     GROUP BY 
         ssn, medicamento
 )
@@ -285,7 +243,6 @@ ORDER BY
 
 -- 4  
 
--- mudado com drill down
 WITH metricas AS (
     SELECT 
         c.nome AS nome_clinica,
