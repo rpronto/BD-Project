@@ -1,51 +1,85 @@
 -- 1
 
-WITH dados_ortopedicos AS (
-    SELECT
-        c.ssn,
-        c.data,
-        LEAD(c.data) OVER (PARTITION BY c.ssn, c.chave ORDER BY c.data) AS proxima_data
-    FROM
-        historial_paciente c
-    WHERE
-        c.especialidade = 'ortopedia' -- Filtra apenas consultas de cardiologia
-        AND c.tipo = 'observacao' -- Filtra apenas observações
-        AND c.valor IS NULL -- Filtra observações com valor NULL
-),
-intervalos AS (
-    SELECT
+WITH max_intervalos AS (
+    SELECT 
         ssn,
-        proxima_data - data AS intervalo
+        MAX(proxima_data - data) AS max_intervalo
     FROM
-        dados_ortopedicos
+        (SELECT 
+            c.ssn,
+            c.data,
+            LEAD(c.data) OVER (PARTITION BY c.ssn, c.chave ORDER BY c.data) AS proxima_data
+        FROM 
+            historial_paciente c
+        WHERE
+            c.especialidade = 'ortopedia' AND c.tipo = 'observacao' AND c.valor IS NULL
+        )
     WHERE
         proxima_data IS NOT NULL
-),
-max_intervalos AS (
-    SELECT
-        ssn,
-        MAX(intervalo) AS max_intervalo
-    FROM
-        intervalos
     GROUP BY
         ssn
+    ORDER BY    
+        max_intervalo DESC
 ),
-valor_maximo AS (
-    SELECT
+valor_maximo AS(
+    SELECT 
         MAX(max_intervalo) AS valor_max
-    FROM
+    FROM 
         max_intervalos
 )
 SELECT
     m.ssn
 FROM
-    max_intervalos m
-JOIN
-    valor_maximo v
-ON
-    m.max_intervalo = v.valor_max
-ORDER BY
-    m.max_intervalo DESC;
+    max_intervalos m JOIN valor_maximo v ON m.max_intervalo = v.valor_max;
+
+
+--WITH dados_ortopedicos AS (
+--    SELECT
+--        c.ssn,
+--        c.data,
+--        c.chave,
+--        LEAD(c.data) OVER (PARTITION BY c.ssn, c.chave ORDER BY c.data) AS proxima_data
+--    FROM
+--        historial_paciente c
+--    WHERE
+--        c.especialidade = 'ortopedia' -- Filtra apenas consultas de ortopedia
+--        AND c.tipo = 'observacao' -- Filtra apenas observações
+--        AND c.valor IS NULL -- Filtra observações com valor NULL
+--),
+--intervalos AS (
+--    SELECT
+--        ssn,
+--        proxima_data - data AS intervalo
+--    FROM
+--        dados_ortopedicos
+--    WHERE
+--        proxima_data IS NOT NULL
+--),
+--max_intervalos AS (
+--    SELECT
+--        ssn,
+--        MAX(intervalo) AS max_intervalo
+--    FROM
+--        intervalos
+--    GROUP BY
+--        ssn
+--),
+--valor_maximo AS (
+--    SELECT
+--        MAX(max_intervalo) AS valor_max
+--    FROM
+--        max_intervalos
+--)
+--SELECT
+--    m.ssn,
+--FROM
+--    max_intervalos m
+--JOIN
+--    valor_maximo v
+--ON
+--    m.max_intervalo = v.valor_max
+--ORDER BY
+--    m.max_intervalo DESC;
 
 -- 2
 
@@ -121,7 +155,7 @@ GROUP BY
     )
 ORDER BY 
     medicamento, mes, dia_do_mes;
-    
+
 
 --SELECT * FROM
 --    (SELECT
