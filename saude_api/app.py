@@ -42,7 +42,7 @@ log = app.logger
 
 @app.route("/", methods=("GET",))
 def list_clinicas():
-    ''' Show all clinics '''
+    ''' Lists all clinics (name and address). '''
 
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
@@ -61,10 +61,10 @@ def list_clinicas():
 
 @app.route("/c/<clinica>/", methods=("GET",))
 def list_especialidades(clinica):
-    """Show specialities in clinica."""
+    """ Lists all specialities in <clinica>."""
 
     if not check_clinica(clinica):
-        return jsonify({'status': 'error', 'message': 'A clínica não existe.'}), 400
+        return jsonify({'status': 'error', 'message': 'A clinica nao existe.'}), 400
 
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
@@ -89,13 +89,16 @@ def list_especialidades(clinica):
     
 @app.route("/c/<clinica>/<especialidade>/", methods=("GET",))
 def list_medicos(clinica, especialidade):
+    ''' Lists all doctors (name) from <especialidade> who work in
+    <clinica> and the first 3 available hours for consultation of 
+    each of them (date and time). '''
 
     error = []
     if not check_clinica(clinica):
-        error.append('Clínica inválida.')
+        error.append('Clinica invalida.')
 
     if not check_especialidade(especialidade):
-        error.append('Especialidade inválida.')
+        error.append('Especialidade invalida.')
 
     if error:
         return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
@@ -107,7 +110,7 @@ def list_medicos(clinica, especialidade):
 
             if not check_especialidade_em_clinica(clinica, especialidade):
                 return jsonify({'status': 'error', 'message': 
-                                'Não existem médicos desta especialidade nesta clínica.'}), 400
+                                'Nao existem medicos desta especialidade nesta clinica.'}), 400
 
             medicos = cur.execute(
                 """
@@ -166,26 +169,26 @@ def list_medicos(clinica, especialidade):
 
 @app.route('/a/<clinica>/registar/', methods=("POST",))
 def register_consulta(clinica):
-    ''' Registers new appointment. '''
+    ''' Registers new appointment in <clinica>. '''
 
-    paciente = request.json.get("paciente")
-    medico = request.json.get("medico")
-    data_consulta = request.json.get("data")
-    hora_consulta = request.json.get("hora")
+    paciente = request.args.get("paciente")
+    medico = request.args.get("medico")
+    data_consulta = request.args.get("data")
+    hora_consulta = request.args.get("hora")
 
     error = []
     if not check_clinica(clinica):
-        error.append('Clínica inválida.')
+        error.append('Clinica invalida.')
 
     if not paciente:
         error.append("Paciente is required.")
     elif not check_paciente(paciente):
-        error.append("Número de ssn de paciente não existe.")
+        error.append("Numero de ssn de paciente nao existe.")
 
     if not medico:
         error.append("Medico is required.")
     elif not check_medico(medico):
-        error.append('Número de nif de medico não existe.')
+        error.append('Numero de nif de medico nao existe.')
 
     if not data_consulta:
         error.append("Data de consulta is required.")
@@ -199,16 +202,22 @@ def register_consulta(clinica):
     elif (not is_valid_hour(hora_consulta)):
         error.append("Formato hora de consulta incorreto. Hora tem de ser da forma HH-mm-ss. ")
 
-
     consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
     if consulta_datetime <= datetime.now():
         error.append("A consulta deve ser marcada para um momento futuro.")
 
     if not valid_working_time(hora_consulta):
-        error.append("A consulta não pode ser marcada a estas horas.")
+        error.append("A consulta nao pode ser marcada a estas horas.")
 
-    if check_consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
-        error.append("Já existe uma consulta a estas horas. ")
+    if consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+        error.append("Esta consulta ja esta marcada. ")
+
+    else:
+        if not medico_available(medico, data_consulta, hora_consulta):
+            error.append("Medico ja tem uma consulta marcada para estas horas. ")
+
+        if not paciente_available(paciente, data_consulta, hora_consulta):
+            error.append("Paciente ja tem uma consulta marcada para estas horas. ")
 
     if error:
         return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
@@ -247,25 +256,26 @@ def register_consulta(clinica):
 
 @app.route('/a/<clinica>/cancelar/', methods=("POST",))
 def cancel_consulta(clinica):
+    ''' Cancels an appointment that hasn't taken place yet at <clinica>. '''
 
-    paciente = request.json.get("paciente")
-    medico = request.json.get("medico")
-    data_consulta = request.json.get("data")
-    hora_consulta = request.json.get("hora")
+    paciente = request.args.get("paciente")
+    medico = request.args.get("medico")
+    data_consulta = request.args.get("data")
+    hora_consulta = request.args.get("hora")
 
     error = []
     if not check_clinica(clinica):
-        error.append('Clínica inválida.')
+        error.append('Clinica invalida.')
 
     if not paciente:
         error.append("Paciente is required.")
     elif not check_paciente(paciente):
-        error.append("Número de ssn de paciente não existe.")
+        error.append("Numero de ssn de paciente nao existe.")
 
     if not medico:
         error.append("Medico is required.")
     elif not check_medico(medico):
-        error.append('Número de nif de medico não existe.')
+        error.append('Numero de nif de medico nao existe.')
 
     if not data_consulta:
         error.append("Data de consulta is required.")
@@ -285,10 +295,10 @@ def cancel_consulta(clinica):
         error.append("A consulta deve estar marcada para um momento futuro.")
 
     if not valid_working_time(hora_consulta):
-        error.append("A consulta não pode estar marcada para estas horas.")
+        error.append("A consulta nao pode estar marcada para estas horas.")
 
-    if not check_consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
-        error.append("Não existe nenhuma consulta a estas horas. ")
+    if not consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+        error.append("Nao existe nenhuma consulta a estas horas. ")
 
     if error:
         return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
@@ -311,7 +321,7 @@ def cancel_consulta(clinica):
                 ).fetchone()
                 if codigo_sns is None or id is None:
                     return jsonify({'status': 'error', 'message': 
-                                    'Consulta não encontrada ou já cancelada.'}), 404
+                                    'Consulta nao encontrada ou ja cancelada.'}), 404
 
                 cur.execute(
                     '''
@@ -349,7 +359,7 @@ def cancel_consulta(clinica):
 
 
 def check_clinica(clinica):
-    ''' Verifica se a clinica existe. '''
+    ''' Checks if the clinic <clinic> exists. '''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute(
@@ -366,7 +376,7 @@ def check_clinica(clinica):
         
 
 def check_especialidade(especialidade):
-    ''' Verifica se a especialidade existe. '''
+    ''' Checks if the speciality <especialidade> exists. '''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute(
@@ -383,7 +393,8 @@ def check_especialidade(especialidade):
         
 
 def check_especialidade_em_clinica(clinica, especialidade):
-    ''' Verifica se a especialidade existe na clínica. '''
+    ''' Checks if there are any doctors with speciality <especialidade> 
+    working at <clinica>.'''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute(
@@ -402,7 +413,7 @@ def check_especialidade_em_clinica(clinica, especialidade):
         
 
 def check_paciente(paciente):
-    ''' Verifica se a paciente existe. '''
+    ''' Checks if the patient's ssn exists. '''
     if len(paciente) != 11:
         return False
     
@@ -422,7 +433,7 @@ def check_paciente(paciente):
 
 
 def check_medico(medico):
-    ''' Verifica se a medico existe. '''
+    ''' Checks if the doctor's nif exists. '''
 
     if len(medico) != 9:
         return False
@@ -443,6 +454,7 @@ def check_medico(medico):
 
 
 def valid_working_time(hora):
+    ''' Checks if it's a valid time for an appointment to be made. '''
 
     # Define os intervalos de trabalho
     manha_inicio = time(8, 0, 0)
@@ -456,12 +468,13 @@ def valid_working_time(hora):
     if (manha_inicio <= hora_obj <= manha_fim) or (tarde_inicio <= hora_obj <= tarde_fim):
         # Verifica se a hora é uma hora exata ou meia hora
         if hora_obj.minute == 0 or hora_obj.minute == 30:
-            return True
+            if hora_obj.second == 0:
+                return True
         
     return False
 
-def check_consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
-    ''' Verifica se existe uma consulta com estes dados. '''
+def consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+    ''' Checks if an appointment exists. '''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute(
@@ -482,6 +495,7 @@ def check_consulta_exists(clinica, paciente, medico, data_consulta, hora_consult
 
 
 def round_up_to_next_half_hour(dt):
+    ''' Gets the next valid time to schedule an appointment. '''
     # Se os minutos são 0-29, arredonda para a meia hora seguinte
     # Se os minutos são 30-59, arredonda para a próxima hora
     if dt.minute < 30:
@@ -498,10 +512,12 @@ def round_up_to_next_half_hour(dt):
     return dt
 
 def get_next_day(dt):
+    ''' Gets the next day. '''
     return dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
 
 def check_medico_trabalha_em_clinica(clinica, nif, data):
+    ''' Checks if the doctor with <nif> is working at <clinic> on <data>. '''
     dia_semana = (data.isoweekday()) % 7
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
@@ -520,7 +536,45 @@ def check_medico_trabalha_em_clinica(clinica, nif, data):
                 return False
             return True
         
-    
+
+def medico_available(medico, data, hora):
+    ''' Checks if the doctor doesn't have any appointments scheduled. '''
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM consulta
+                WHERE nif = %s
+                AND data = %s
+                AND hora = %s;
+                """,
+                (medico, data, hora),
+            )
+            if cur.fetchone() is not None:
+                return False
+            return True
+
+
+def paciente_available(paciente, data, hora):
+    ''' Checks if the patient doesn't have any appointments scheduled.'''
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM consulta
+                WHERE ssn = %s
+                AND data = %s
+                AND hora = %s;
+                """,
+                (paciente, data, hora),
+            )
+            if cur.fetchone() is not None:
+                return False
+            return True
+
+
 def is_valid_hour(hora):
     try:
         # Converte a string de hora para um objeto datetime
@@ -528,7 +582,6 @@ def is_valid_hour(hora):
         return True
     except ValueError:
         return False
-
 
 def is_valid_date(data):
     try:
@@ -560,6 +613,7 @@ def generate_codigo_sns():
                     
 
 def get_next_consulta_id():
+    ''' Gets the next consulta_id. '''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             max_id = cur.execute(
