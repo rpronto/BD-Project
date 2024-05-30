@@ -40,141 +40,6 @@ log = app.logger
 
 
 
-def check_clinica(clinica):
-    ''' Verifica se a clinica existe. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM clinica
-                WHERE nome = %s;
-                """,
-                (clinica,),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
-        
-
-def check_especialidade(especialidade):
-    ''' Verifica se a especialidade existe. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico
-                WHERE especialidade = %s;
-                """,
-                (especialidade,),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
-        
-
-def check_especialidade_em_clinica(clinica, especialidade):
-    ''' Verifica se a especialidade existe na clínica. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico m
-                JOIN trabalha t USING(nif)
-                WHERE m.especialidade = %s
-                AND t.nome = %s;
-                """,
-                (especialidade, clinica),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
-        
-
-def check_paciente(paciente):
-    ''' Verifica se a paciente existe. '''
-    if len(paciente) != 11:
-        return False
-    
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM paciente
-                WHERE ssn = %s
-                """,
-                (paciente, ),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
-
-
-def check_medico(medico):
-    ''' Verifica se a medico existe. '''
-
-    if len(medico) != 9:
-        return False
-    
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico
-                WHERE nif = %s
-                """,
-                (medico, ),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
-
-
-def valid_working_time(hora):
-
-    # Define os intervalos de trabalho
-    manha_inicio = time(8, 0, 0)
-    manha_fim = time(12, 30, 0)
-    tarde_inicio = time(14, 0, 0)
-    tarde_fim = time(18, 30, 0)
-    
-    hora_obj = datetime.strptime(hora, "%H:%M:%S").time()
-
-    # Verifica se a hora está dentro dos intervalos de trabalho
-    if (manha_inicio <= hora_obj <= manha_fim) or (tarde_inicio <= hora_obj <= tarde_fim):
-        # Verifica se a hora é uma hora exata ou meia hora
-        if hora_obj.minute == 0 or hora_obj.minute == 30:
-            return True
-        
-    return False
-
-def check_consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
-    ''' Verifica se existe uma consulta com estes dados. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM consulta 
-                WHERE nome = %s
-                AND ssn = %s
-                AND nif = %s
-                AND data = %s
-                AND hora = %s
-                """,
-                (clinica, paciente, medico, data_consulta, hora_consulta,),
-            )
-            if cur.fetchone() is None: # nao existe
-                return False
-            return True
-
-
-
-
 @app.route("/", methods=("GET",))
 def list_clinicas():
     ''' Show all clinics '''
@@ -221,49 +86,7 @@ def list_especialidades(clinica):
     return jsonify(res)
 
 
-
-### problema: temos de verificar qual o proximo dia em que o medico trabalha neste dia
-def round_up_to_next_half_hour(dt):
-    # Se os minutos são 0-29, arredonda para a meia hora seguinte
-    # Se os minutos são 30-59, arredonda para a próxima hora
-    if dt.minute < 30:
-        dt = dt.replace(minute=30, second=0, microsecond=0)
-    else:
-        dt = dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-
-    # Ajuste para fora do horário de trabalho
-    if dt.hour >= 19:
-        dt = dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    elif dt.hour >= 13:
-        dt = dt.replace(hour=14, minute=0, second=0, microsecond=0)
-
-    return dt
-
-def get_next_day(dt):
-    return dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
-
-
-def check_medico_trabalha_em_clinica(clinica, nif, data):
-    dia_semana = (data.isoweekday()) % 7
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico m
-                JOIN trabalha t USING(nif)
-                WHERE m.nif = %s
-                AND t.nome = %s
-                AND t.dia_da_semana = %s;
-                """,
-                (nif, clinica, dia_semana),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
     
-
-
 @app.route("/c/<clinica>/<especialidade>/", methods=("GET",))
 def list_medicos(clinica, especialidade):
 
@@ -338,58 +161,6 @@ def list_medicos(clinica, especialidade):
 
     return jsonify(result)
 
-    
-def is_valid_hour(hora):
-    try:
-        # Converte a string de hora para um objeto datetime
-        hora_obj = datetime.strptime(hora, "%H:%M:%S")
-        return True
-    except ValueError:
-        return False
-
-
-def is_valid_date(data):
-    try:
-        data_obj = datetime.strptime(data, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
-
-
-def generate_codigo_sns():
-    ''' Generates a unique codigo_sns for consulta. '''    
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            while True:
-                codigo_sns = ''.join(random.choices(string.digits, k=12))
-                cur.execute(
-                    """
-                    SELECT 1
-                    FROM consulta c 
-                    WHERE c.codigo_sns = %(codigo)s;
-                    """,
-                    {"codigo": codigo_sns}
-                )
-                if cur.fetchone() is None:
-                    break
-        log.debug(f"Found {cur.rowcount} rows.")
-
-    return codigo_sns
-                    
-
-def get_next_consulta_id():
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            max_id = cur.execute(
-                """
-                SELECT MAX(id) 
-                FROM consulta;
-                """,
-                (),
-            ).fetchone()
-            log.debug(f"Found {cur.rowcount} rows.")
-    for id in max_id:
-        return id + 1
 
 
 
@@ -401,7 +172,6 @@ def register_consulta(clinica):
     medico = request.json.get("medico")
     data_consulta = request.json.get("data")
     hora_consulta = request.json.get("hora")
-
 
     error = []
     if not check_clinica(clinica):
@@ -575,6 +345,234 @@ def cancel_consulta(clinica):
                 response = {'status': 'error', 'message': f'Erro ao cancelar consulta: {str(e)}'}
 
     return jsonify(response)
+
+
+
+def check_clinica(clinica):
+    ''' Verifica se a clinica existe. '''
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM clinica
+                WHERE nome = %s;
+                """,
+                (clinica,),
+            )
+            if cur.fetchone() is None:
+                return False
+            return True
+        
+
+def check_especialidade(especialidade):
+    ''' Verifica se a especialidade existe. '''
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM medico
+                WHERE especialidade = %s;
+                """,
+                (especialidade,),
+            )
+            if cur.fetchone() is None:
+                return False
+            return True
+        
+
+def check_especialidade_em_clinica(clinica, especialidade):
+    ''' Verifica se a especialidade existe na clínica. '''
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM medico m
+                JOIN trabalha t USING(nif)
+                WHERE m.especialidade = %s
+                AND t.nome = %s;
+                """,
+                (especialidade, clinica),
+            )
+            if cur.fetchone() is None:
+                return False
+            return True
+        
+
+def check_paciente(paciente):
+    ''' Verifica se a paciente existe. '''
+    if len(paciente) != 11:
+        return False
+    
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM paciente
+                WHERE ssn = %s
+                """,
+                (paciente, ),
+            )
+            if cur.fetchone() is None:
+                return False
+            return True
+
+
+def check_medico(medico):
+    ''' Verifica se a medico existe. '''
+
+    if len(medico) != 9:
+        return False
+    
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM medico
+                WHERE nif = %s
+                """,
+                (medico, ),
+            )
+            if cur.fetchone() is None:
+                return False
+            return True
+
+
+def valid_working_time(hora):
+
+    # Define os intervalos de trabalho
+    manha_inicio = time(8, 0, 0)
+    manha_fim = time(12, 30, 0)
+    tarde_inicio = time(14, 0, 0)
+    tarde_fim = time(18, 30, 0)
+    
+    hora_obj = datetime.strptime(hora, "%H:%M:%S").time()
+
+    # Verifica se a hora está dentro dos intervalos de trabalho
+    if (manha_inicio <= hora_obj <= manha_fim) or (tarde_inicio <= hora_obj <= tarde_fim):
+        # Verifica se a hora é uma hora exata ou meia hora
+        if hora_obj.minute == 0 or hora_obj.minute == 30:
+            return True
+        
+    return False
+
+def check_consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+    ''' Verifica se existe uma consulta com estes dados. '''
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM consulta 
+                WHERE nome = %s
+                AND ssn = %s
+                AND nif = %s
+                AND data = %s
+                AND hora = %s
+                """,
+                (clinica, paciente, medico, data_consulta, hora_consulta,),
+            )
+            if cur.fetchone() is None: # nao existe
+                return False
+            return True
+
+
+def round_up_to_next_half_hour(dt):
+    # Se os minutos são 0-29, arredonda para a meia hora seguinte
+    # Se os minutos são 30-59, arredonda para a próxima hora
+    if dt.minute < 30:
+        dt = dt.replace(minute=30, second=0, microsecond=0)
+    else:
+        dt = dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+
+    # Ajuste para fora do horário de trabalho
+    if dt.hour >= 19:
+        dt = dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    elif dt.hour >= 13:
+        dt = dt.replace(hour=14, minute=0, second=0, microsecond=0)
+
+    return dt
+
+def get_next_day(dt):
+    return dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+
+def check_medico_trabalha_em_clinica(clinica, nif, data):
+    dia_semana = (data.isoweekday()) % 7
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM medico m
+                JOIN trabalha t USING(nif)
+                WHERE m.nif = %s
+                AND t.nome = %s
+                AND t.dia_da_semana = %s;
+                """,
+                (nif, clinica, dia_semana),
+            )
+            if cur.fetchone() is None:
+                return False
+            return True
+        
+    
+def is_valid_hour(hora):
+    try:
+        # Converte a string de hora para um objeto datetime
+        hora_obj = datetime.strptime(hora, "%H:%M:%S")
+        return True
+    except ValueError:
+        return False
+
+
+def is_valid_date(data):
+    try:
+        data_obj = datetime.strptime(data, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def generate_codigo_sns():
+    ''' Generates a unique codigo_sns for consulta. '''    
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            while True:
+                codigo_sns = ''.join(random.choices(string.digits, k=12))
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM consulta c 
+                    WHERE c.codigo_sns = %(codigo)s;
+                    """,
+                    {"codigo": codigo_sns}
+                )
+                if cur.fetchone() is None:
+                    break
+        log.debug(f"Found {cur.rowcount} rows.")
+
+    return codigo_sns
+                    
+
+def get_next_consulta_id():
+    with psycopg.connect(conninfo=DATABASE_URL) as conn:
+        with conn.cursor(row_factory=namedtuple_row) as cur:
+            max_id = cur.execute(
+                """
+                SELECT MAX(id) 
+                FROM consulta;
+                """,
+                (),
+            ).fetchone()
+            log.debug(f"Found {cur.rowcount} rows.")
+    for id in max_id:
+        return id + 1
+
 
 
 if __name__ == "__main__":
