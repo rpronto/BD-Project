@@ -51,7 +51,7 @@ def list_clinicas():
                 SELECT nome, morada
                 FROM clinica;
                 ''',
-                {},
+                (),
             ).fetchall()
             log.debug(f"Found {cur.rowcount} rows.")
 
@@ -112,6 +112,10 @@ def list_medicos(clinica, especialidade):
                 return jsonify({'status': 'error', 'message': 
                                 'Nao existem medicos desta especialidade nesta clinica.'}), 400
 
+            cur.execute("BEGIN;")
+            # Lock the consulta table in SHARE ROW EXCLUSIVE mode
+            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
+            
             medicos = cur.execute(
                 """
                 SELECT DISTINCT m.nome, m.nif
@@ -125,7 +129,7 @@ def list_medicos(clinica, especialidade):
             ).fetchall()
 
             log.debug(f"Found {cur.rowcount} rows.")
-
+            
             for medico in medicos:
                 hora_atual = datetime.now()
                 rounded_time = round_up_to_next_half_hour(hora_atual)
@@ -161,7 +165,8 @@ def list_medicos(clinica, especialidade):
                         result[medico_nome].append({'data': str(data), 'hora': str(hora)})
                     # update hora
                     rounded_time = round_up_to_next_half_hour(rounded_time)
-
+            cur.execute("COMMIT;")
+            
     return jsonify(result)
 
 
@@ -229,6 +234,9 @@ def register_consulta(clinica):
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             try:
+                cur.execute("BEGIN;")
+                # Lock the consulta table in ACCESS EXCLUSIVE mode
+                cur.execute("LOCK TABLE consulta IN ACCESS EXCLUSIVE MODE;")
                 cur.execute(
                     """
                     INSERT INTO consulta (id, ssn, nif, nome, data, hora, codigo_sns)
@@ -243,7 +251,7 @@ def register_consulta(clinica):
                     "hora_consulta": hora_consulta, 
                     "codigo_sns": codigo_sns},
                 )
-                conn.commit()
+                cur.execute("COMMIT;")
                 response = {'status': 'success', 'message': 'Consulta registrada com sucesso.'}
 
             except Exception as e:
@@ -307,6 +315,12 @@ def cancel_consulta(clinica):
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             try:
+                cur.execute("BEGIN;")
+                    
+                cur.execute("LOCK TABLE consulta IN ACCESS EXCLUSIVE MODE;")
+                cur.execute("LOCK TABLE receita IN ACCESS EXCLUSIVE MODE;")
+                cur.execute("LOCK TABLE observacao IN ACCESS EXCLUSIVE MODE;")
+
                 codigo_sns, id = cur.execute(
                     '''
                     SELECT codigo_sns, id
@@ -348,7 +362,7 @@ def cancel_consulta(clinica):
                     ''', 
                     (paciente, medico, clinica, data_consulta, hora_consulta)
                 )
-                conn.commit()
+                cur.execute("COMMIT;")
                 response = {'status': 'success', 'message': 'Consulta cancelada com sucesso.'}
             except Exception as e:
                 cur.execute('ROLLBACK')
@@ -477,7 +491,11 @@ def consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
     ''' Checks if an appointment exists. '''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
+            cur.execute("BEGIN;")
+            
+            # Lock the consulta table in SHARE ROW EXCLUSIVE mode
+            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
+            res = cur.execute(
                 """
                 SELECT 1
                 FROM consulta 
@@ -488,10 +506,10 @@ def consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
                 AND hora = %s
                 """,
                 (clinica, paciente, medico, data_consulta, hora_consulta,),
-            )
-            if cur.fetchone() is None: # nao existe
-                return False
-            return True
+            ).fetchone()
+            cur.execute("COMMIT;")
+            return res is not None
+
 
 
 def round_up_to_next_half_hour(dt):
@@ -541,6 +559,9 @@ def medico_available(medico, data, hora):
     ''' Checks if the doctor doesn't have any appointments scheduled. '''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute("BEGIN;")
+            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
+
             cur.execute(
                 """
                 SELECT 1
@@ -552,7 +573,9 @@ def medico_available(medico, data, hora):
                 (medico, data, hora),
             )
             if cur.fetchone() is not None:
+                cur.execute("COMMIT;")
                 return False
+            cur.execute("COMMIT;")
             return True
 
 
@@ -560,6 +583,9 @@ def paciente_available(paciente, data, hora):
     ''' Checks if the patient doesn't have any appointments scheduled.'''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute("BEGIN;")
+            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
+
             cur.execute(
                 """
                 SELECT 1
@@ -571,7 +597,9 @@ def paciente_available(paciente, data, hora):
                 (paciente, data, hora),
             )
             if cur.fetchone() is not None:
+                cur.execute("COMMIT;")
                 return False
+            cur.execute("COMMIT;")
             return True
 
 
@@ -595,8 +623,11 @@ def generate_codigo_sns():
     ''' Generates a unique codigo_sns for consulta. '''    
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute("BEGIN;")
+            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
             while True:
                 codigo_sns = ''.join(random.choices(string.digits, k=12))
+                
                 cur.execute(
                     """
                     SELECT 1
@@ -607,8 +638,9 @@ def generate_codigo_sns():
                 )
                 if cur.fetchone() is None:
                     break
+            cur.execute("COMMIT;")
         log.debug(f"Found {cur.rowcount} rows.")
-
+        
     return codigo_sns
                     
 
@@ -616,6 +648,8 @@ def get_next_consulta_id():
     ''' Gets the next consulta_id. '''
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
+            cur.execute("BEGIN;")
+            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
             max_id = cur.execute(
                 """
                 SELECT MAX(id) 
@@ -623,6 +657,7 @@ def get_next_consulta_id():
                 """,
                 (),
             ).fetchone()
+            cur.execute("COMMIT;")
             log.debug(f"Found {cur.rowcount} rows.")
     for id in max_id:
         return id + 1
