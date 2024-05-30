@@ -10,7 +10,7 @@ CREATE MATERIALIZED VIEW historial_paciente AS
         EXTRACT(YEAR FROM c.data) AS ano,
         EXTRACT(MONTH FROM c.data) AS mes,
         EXTRACT(DAY FROM c.data) AS dia_do_mes,
-        REGEXP_REPLACE(clinic.morada, '.* [0-9]{4}-[0-9]{3} ', '') AS localidade,
+        SUBSTRING(clinic.morada, '\d{4}-\d{3} (.*)') AS localidade,
         m.especialidade, -- medico 
         'observacao' AS tipo, -- observacao
         o.parametro AS chave, 
@@ -30,7 +30,7 @@ CREATE MATERIALIZED VIEW historial_paciente AS
         EXTRACT(YEAR FROM c.data) AS ano,
         EXTRACT(MONTH FROM c.data) AS mes,
         EXTRACT(DAY FROM c.data) AS dia_do_mes,
-        REGEXP_REPLACE(clinic.morada, '.* [0-9]{4}-[0-9]{3} ', '') AS localidade,
+        SUBSTRING(clinic.morada, '\d{4}-\d{3} (.*)') AS localidade,
         m.especialidade, -- medico 
         'receita' AS tipo, -- receita
         r.medicamento AS chave, 
