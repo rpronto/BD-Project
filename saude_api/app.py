@@ -210,6 +210,7 @@ def register_consulta(clinica):
     consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
     if consulta_datetime <= datetime.now():
         error.append("A consulta deve ser marcada para um momento futuro.")
+        return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
 
     if not valid_working_time(hora_consulta):
         error.append("A consulta nao pode ser marcada a estas horas.")
@@ -297,10 +298,10 @@ def cancel_consulta(clinica):
     elif (not is_valid_hour(hora_consulta)):
         error.append("Formato hora de consulta incorreto. Hora tem de ser da forma HH-mm-ss. ")
 
-
     consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
     if consulta_datetime <= datetime.now():
         error.append("A consulta deve estar marcada para um momento futuro.")
+        return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
 
     if not valid_working_time(hora_consulta):
         error.append("A consulta nao pode estar marcada para estas horas.")
