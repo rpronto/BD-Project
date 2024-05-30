@@ -86,9 +86,16 @@ SELECT
 FROM 
     medicamento_total
 GROUP BY 
-    ROLLUP (medicamento, localidade, nome_clinica),
-    ROLLUP (medicamento, mes, dia_do_mes),
-    ROLLUP (medicamento, esp, nome_m)
+    GROUPING SETS (
+        (medicamento),
+        (medicamento, localidade),
+        (medicamento, localidade, nome_clinica),
+        (medicamento, mes),
+        (medicamento, mes, dia_do_mes),
+        (medicamento, esp),
+        (medicamento, esp, nome_m),
+        ()
+    )
 ORDER BY 
     medicamento, mes, dia_do_mes;
 

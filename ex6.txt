@@ -44,10 +44,10 @@ b-tree para data (??)
 SELECT especialidade, SUM(quantidade) AS qtd
 FROM medico
 JOIN consulta USING (nif)                --> nif é PK em médico mas não em consulta
-JOIN receita USING (codigo_ssn)          --> em receita é PK composta (codigo_ssn, medicamento)
-WHERE data BETWEEN ‘2023-01-01’ AND ‘2023-12-31’        --> data está em consulta
+JOIN receita USING (codigo_sns)          --> em receita é PK composta (codigo_sns, medicamento)
+WHERE data BETWEEN '2023-01-01' AND '2023-12-31'        --> data está em consulta
 GROUP BY especialidade                                  --> especialidade está em médico
-SORT BY qtd;                                            --> quantidade está em receita
+ORDER BY qtd;                                            --> quantidade está em receita
 
 
 CREATE INDEX idx_consulta_nif ON consulta USING HASH (nif);
@@ -55,7 +55,7 @@ CREATE INDEX idx_consulta_nif ON consulta USING HASH (nif);
 entanto, é bom garantir que na tabela 'consulta' também tenho um índice para o atributo 'nif'. Utilizamos um índice do tipo HASH uma vez que é mais apropriado para
 seleção por igualdade, como operações JOIN, optimizando assim esta operação.
 
---> Como em receita, ('codigo_ssn', 'medicamento') é PK composta, já existe um índice implicito para o par ('codigo_ssn', 'medicamento'), desta forma não há necessidade
+--> Como em receita, ('codigo_sns', 'medicamento') é PK composta, já existe um índice implicito para o par ('codigo_sns', 'medicamento'), desta forma não há necessidade
 de criar um novo índice.
 
 CREATE INDEX idx_consulta_data ON consulta(data);
