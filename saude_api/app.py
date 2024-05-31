@@ -63,11 +63,13 @@ def list_clinicas():
 def list_especialidades(clinica):
     """ Lists all specialities in <clinica>."""
 
-    if not check_clinica(clinica):
-        return jsonify({'status': 'error', 'message': 'A clinica nao existe.'}), 400
 
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
+            
+            if not check_clinica(clinica, conn, cur):
+                return jsonify({'status': 'error', 'message': 'A clinica nao existe.'}), 400
+
             especialidades = cur.execute(
                 """
                 SELECT DISTINCT m.especialidade 
@@ -102,20 +104,20 @@ def list_medicos(clinica, especialidade):
             cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
             
             error = []
-            if not check_clinica(clinica):
+            if not check_clinica(clinica, conn, cur):
                 error.append('Clinica invalida.')
 
-            if not check_especialidade(especialidade):
+            if not check_especialidade(especialidade, conn, cur):
                 error.append('Especialidade invalida.')
 
             if error:
-                cur.execute("COMMIT;")
+                cur.execute("ROLLBACK;")
                 return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
             
             # vai buscar medicos que trabalham na clinica com essa especialidade
 
-            if not check_especialidade_em_clinica(clinica, especialidade):
-                cur.execute("COMMIT;")
+            if not check_especialidade_em_clinica(clinica, especialidade, conn, cur):
+                cur.execute("ROLLBACK;")
                 return jsonify({'status': 'error', 'message': 
                                 'Nao existem medicos desta especialidade nesta clinica.'}), 400
 
@@ -145,7 +147,7 @@ def list_medicos(clinica, especialidade):
                     hora = rounded_time.time()
                     data = rounded_time.date()
                     
-                    while not check_medico_trabalha_em_clinica(clinica, medico_nif, data):
+                    while not check_medico_trabalha_em_clinica(clinica, medico_nif, data, conn, cur):
                         rounded_time = get_next_day(rounded_time)
                         hora = rounded_time.time()
                         data = rounded_time.date()
@@ -192,17 +194,17 @@ def register_consulta(clinica):
                 cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
 
                 error = []
-                if not check_clinica(clinica):
+                if not check_clinica(clinica, conn, cur):
                     error.append('Clinica invalida.')
 
                 if not paciente:
                     error.append("Paciente is required.")
-                elif not check_paciente(paciente):
+                elif not check_paciente(paciente, conn, cur):
                     error.append("Numero de ssn de paciente nao existe.")
 
                 if not medico:
                     error.append("Medico is required.")
-                elif not check_medico(medico):
+                elif not check_medico(medico, conn, cur):
                     error.append('Numero de nif de medico nao existe.')
 
                 if not data_consulta:
@@ -219,30 +221,30 @@ def register_consulta(clinica):
 
                 consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
                 if consulta_datetime <= datetime.now():
-                    cur.execute("COMMIT;")
+                    cur.execute("ROLLBACK;")
                     error.append("A consulta deve ser marcada para um momento futuro.")
                     return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
 
                 if not valid_working_time(hora_consulta):
                     error.append("A consulta nao pode ser marcada a estas horas.")
 
-                if consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+                if consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta, conn, cur):
                     error.append("Esta consulta ja esta marcada. ")
 
                 else:
-                    if not medico_available(medico, data_consulta, hora_consulta):
+                    if not medico_available(medico, data_consulta, hora_consulta, conn, cur):
                         error.append("Medico ja tem uma consulta marcada para estas horas. ")
 
-                    if not paciente_available(paciente, data_consulta, hora_consulta):
+                    if not paciente_available(paciente, data_consulta, hora_consulta, conn, cur):
                         error.append("Paciente ja tem uma consulta marcada para estas horas. ")
 
                 if error:
-                    cur.execute("COMMIT;")
+                    cur.execute("ROLLBACK;")
                     return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
 
 
-                id = get_next_consulta_id()
-                codigo_sns = generate_codigo_sns()
+                id = get_next_consulta_id(conn, cur)
+                codigo_sns = generate_codigo_sns(conn, cur)
 
                 cur.execute(
                     """
@@ -288,17 +290,17 @@ def cancel_consulta(clinica):
                 cur.execute("LOCK TABLE observacao IN ACCESS EXCLUSIVE MODE;")
 
                 error = []
-                if not check_clinica(clinica):
+                if not check_clinica(clinica, conn, cur):
                     error.append('Clinica invalida.')
 
                 if not paciente:
                     error.append("Paciente is required.")
-                elif not check_paciente(paciente):
+                elif not check_paciente(paciente, conn, cur):
                     error.append("Numero de ssn de paciente nao existe.")
 
                 if not medico:
                     error.append("Medico is required.")
-                elif not check_medico(medico):
+                elif not check_medico(medico, conn, cur):
                     error.append('Numero de nif de medico nao existe.')
 
                 if not data_consulta:
@@ -315,18 +317,18 @@ def cancel_consulta(clinica):
 
                 consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
                 if consulta_datetime <= datetime.now():
-                    cur.execute("COMMIT;")
+                    cur.execute("ROLLBACK;")
                     error.append("A consulta deve estar marcada para um momento futuro.")
                     return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
 
                 if not valid_working_time(hora_consulta):
                     error.append("A consulta nao pode estar marcada para estas horas.")
 
-                if not consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+                if not consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta, conn, cur):
                     error.append("Nao existe nenhuma consulta a estas horas. ")
 
                 if error:
-                    cur.execute("COMMIT;")
+                    cur.execute("ROLLBACK;")
                     return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
 
                 codigo_sns, id = cur.execute(
@@ -380,99 +382,88 @@ def cancel_consulta(clinica):
 
 
 
-def check_clinica(clinica):
+def check_clinica(clinica, conn, cur):
     ''' Checks if the clinic <clinic> exists. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM clinica
-                WHERE nome = %s;
-                """,
-                (clinica,),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM clinica
+        WHERE nome = %s;
+        """,
+        (clinica,),
+    )
+    if cur.fetchone() is None:
+        return False
+    return True
         
 
-def check_especialidade(especialidade):
+def check_especialidade(especialidade, conn, cur):
     ''' Checks if the speciality <especialidade> exists. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico
-                WHERE especialidade = %s;
-                """,
-                (especialidade,),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM medico
+        WHERE especialidade = %s;
+        """,
+        (especialidade,),
+    )
+    if cur.fetchone() is None:
+        return False
+    return True
         
 
-def check_especialidade_em_clinica(clinica, especialidade):
+def check_especialidade_em_clinica(clinica, especialidade, conn, cur):
     ''' Checks if there are any doctors with speciality <especialidade> 
     working at <clinica>.'''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico m
-                JOIN trabalha t USING(nif)
-                WHERE m.especialidade = %s
-                AND t.nome = %s;
-                """,
-                (especialidade, clinica),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM medico m
+        JOIN trabalha t USING(nif)
+        WHERE m.especialidade = %s
+        AND t.nome = %s;
+        """,
+        (especialidade, clinica),
+    )
+    if cur.fetchone() is None:
+        return False
+    return True
         
 
-def check_paciente(paciente):
+def check_paciente(paciente, conn, cur):
     ''' Checks if the patient's ssn exists. '''
     if len(paciente) != 11:
         return False
     
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM paciente
-                WHERE ssn = %s
-                """,
-                (paciente, ),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM paciente
+        WHERE ssn = %s
+        """,
+        (paciente, ),
+    )
+    if cur.fetchone() is None:
+        return False
+    return True
 
 
-def check_medico(medico):
+def check_medico(medico, conn, cur):
     ''' Checks if the doctor's nif exists. '''
 
     if len(medico) != 9:
         return False
-    
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico
-                WHERE nif = %s
-                """,
-                (medico, ),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM medico
+        WHERE nif = %s
+        """,
+        (medico, ),
+    )
+    if cur.fetchone() is None:
+        return False
+    return True
 
 
 def valid_working_time(hora):
@@ -495,26 +486,22 @@ def valid_working_time(hora):
         
     return False
 
-def consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+def consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta, conn, cur):
     ''' Checks if an appointment exists. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            # cur.execute("BEGIN;")
             
-            res = cur.execute(
-                """
-                SELECT 1
-                FROM consulta 
-                WHERE nome = %s
-                AND ssn = %s
-                AND nif = %s
-                AND data = %s
-                AND hora = %s
-                """,
-                (clinica, paciente, medico, data_consulta, hora_consulta,),
-            ).fetchone()
-            # cur.execute("COMMIT;")
-            return res is not None
+    res = cur.execute(
+        """
+        SELECT 1
+        FROM consulta 
+        WHERE nome = %s
+        AND ssn = %s
+        AND nif = %s
+        AND data = %s
+        AND hora = %s
+        """,
+        (clinica, paciente, medico, data_consulta, hora_consulta,),
+    ).fetchone()
+    return res is not None
 
 
 
@@ -540,71 +527,57 @@ def get_next_day(dt):
     return dt.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
 
-def check_medico_trabalha_em_clinica(clinica, nif, data):
+def check_medico_trabalha_em_clinica(clinica, nif, data, conn, cur):
     ''' Checks if the doctor with <nif> is working at <clinic> on <data>. '''
     dia_semana = (data.isoweekday()) % 7
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM medico m
-                JOIN trabalha t USING(nif)
-                WHERE m.nif = %s
-                AND t.nome = %s
-                AND t.dia_da_semana = %s;
-                """,
-                (nif, clinica, dia_semana),
-            )
-            if cur.fetchone() is None:
-                return False
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM medico m
+        JOIN trabalha t USING(nif)
+        WHERE m.nif = %s
+        AND t.nome = %s
+        AND t.dia_da_semana = %s;
+        """,
+        (nif, clinica, dia_semana),
+    )
+    if cur.fetchone() is None:
+        return False
+    return True
         
 
-def medico_available(medico, data, hora):
+def medico_available(medico, data, hora, conn, cur):
     ''' Checks if the doctor doesn't have any appointments scheduled. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            # cur.execute("BEGIN;")
-
-            cur.execute(
-                """
-                SELECT 1
-                FROM consulta
-                WHERE nif = %s
-                AND data = %s
-                AND hora = %s;
-                """,
-                (medico, data, hora),
-            )
-            if cur.fetchone() is not None:
-                # cur.execute("COMMIT;")
-                return False
-            # cur.execute("COMMIT;")
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM consulta
+        WHERE nif = %s
+        AND data = %s
+        AND hora = %s;
+        """,
+        (medico, data, hora),
+    )
+    if cur.fetchone() is not None:
+        return False
+    return True
 
 
-def paciente_available(paciente, data, hora):
+def paciente_available(paciente, data, hora, conn, cur):
     ''' Checks if the patient doesn't have any appointments scheduled.'''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            # cur.execute("BEGIN;")
-
-            cur.execute(
-                """
-                SELECT 1
-                FROM consulta
-                WHERE ssn = %s
-                AND data = %s
-                AND hora = %s;
-                """,
-                (paciente, data, hora),
-            )
-            if cur.fetchone() is not None:
-                # cur.execute("COMMIT;")
-                return False
-            # cur.execute("COMMIT;")
-            return True
+    cur.execute(
+        """
+        SELECT 1
+        FROM consulta
+        WHERE ssn = %s
+        AND data = %s
+        AND hora = %s;
+        """,
+        (paciente, data, hora),
+    )
+    if cur.fetchone() is not None:
+        return False
+    return True
 
 
 def is_valid_hour(hora):
@@ -623,44 +596,36 @@ def is_valid_date(data):
         return False
 
 
-def generate_codigo_sns():
+def generate_codigo_sns(conn, cur):
     ''' Generates a unique codigo_sns for consulta. '''    
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            # cur.execute("BEGIN;")
-            while True:
-                codigo_sns = ''.join(random.choices(string.digits, k=12))
-                
-                cur.execute(
-                    """
-                    SELECT 1
-                    FROM consulta c 
-                    WHERE c.codigo_sns = %(codigo)s;
-                    """,
-                    {"codigo": codigo_sns}
-                )
-                if cur.fetchone() is None:
-                    break
-            # cur.execute("COMMIT;")
-        log.debug(f"Found {cur.rowcount} rows.")
+    while True:
+        codigo_sns = ''.join(random.choices(string.digits, k=12))
         
+        cur.execute(
+            """
+            SELECT 1
+            FROM consulta c 
+            WHERE c.codigo_sns = %(codigo)s;
+            """,
+            {"codigo": codigo_sns}
+        )
+        if cur.fetchone() is None:
+            break
+    log.debug(f"Found {cur.rowcount} rows.")
+
     return codigo_sns
                     
 
-def get_next_consulta_id():
+def get_next_consulta_id(conn, cur):
     ''' Gets the next consulta_id. '''
-    with psycopg.connect(conninfo=DATABASE_URL) as conn:
-        with conn.cursor(row_factory=namedtuple_row) as cur:
-            # cur.execute("BEGIN;")
-            max_id = cur.execute(
-                """
-                SELECT MAX(id) 
-                FROM consulta;
-                """,
-                (),
-            ).fetchone()
-            # cur.execute("COMMIT;")
-            log.debug(f"Found {cur.rowcount} rows.")
+    max_id = cur.execute(
+        """
+        SELECT MAX(id) 
+        FROM consulta;
+        """,
+        (),
+    ).fetchone()
+    log.debug(f"Found {cur.rowcount} rows.")
     for id in max_id:
         return id + 1
 
