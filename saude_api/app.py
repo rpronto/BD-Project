@@ -93,29 +93,32 @@ def list_medicos(clinica, especialidade):
     <clinica> and the first 3 available hours for consultation of 
     each of them (date and time). '''
 
-    error = []
-    if not check_clinica(clinica):
-        error.append('Clinica invalida.')
-
-    if not check_especialidade(especialidade):
-        error.append('Especialidade invalida.')
-
-    if error:
-        return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
-
     result = {}
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
-            # vai buscar medicos que trabalham na clinica com essa especialidade
-
-            if not check_especialidade_em_clinica(clinica, especialidade):
-                return jsonify({'status': 'error', 'message': 
-                                'Nao existem medicos desta especialidade nesta clinica.'}), 400
 
             cur.execute("BEGIN;")
             # Lock the consulta table in SHARE ROW EXCLUSIVE mode
             cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
             
+            error = []
+            if not check_clinica(clinica):
+                error.append('Clinica invalida.')
+
+            if not check_especialidade(especialidade):
+                error.append('Especialidade invalida.')
+
+            if error:
+                cur.execute("COMMIT;")
+                return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
+            
+            # vai buscar medicos que trabalham na clinica com essa especialidade
+
+            if not check_especialidade_em_clinica(clinica, especialidade):
+                cur.execute("COMMIT;")
+                return jsonify({'status': 'error', 'message': 
+                                'Nao existem medicos desta especialidade nesta clinica.'}), 400
+
             medicos = cur.execute(
                 """
                 SELECT DISTINCT m.nome, m.nif
@@ -181,63 +184,66 @@ def register_consulta(clinica):
     data_consulta = request.args.get("data")
     hora_consulta = request.args.get("hora")
 
-    error = []
-    if not check_clinica(clinica):
-        error.append('Clinica invalida.')
-
-    if not paciente:
-        error.append("Paciente is required.")
-    elif not check_paciente(paciente):
-        error.append("Numero de ssn de paciente nao existe.")
-
-    if not medico:
-        error.append("Medico is required.")
-    elif not check_medico(medico):
-        error.append('Numero de nif de medico nao existe.')
-
-    if not data_consulta:
-        error.append("Data de consulta is required.")
-
-    elif (not is_valid_date(data_consulta)):
-        error.append("Formato data de consulta incorreto. Data tem de ser da forma YYYY-MM-DD. ")
-
-    if not hora_consulta:
-        error.append("Hora de consulta is required.")
-
-    elif (not is_valid_hour(hora_consulta)):
-        error.append("Formato hora de consulta incorreto. Hora tem de ser da forma HH-mm-ss. ")
-
-    consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
-    if consulta_datetime <= datetime.now():
-        error.append("A consulta deve ser marcada para um momento futuro.")
-        return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
-
-    if not valid_working_time(hora_consulta):
-        error.append("A consulta nao pode ser marcada a estas horas.")
-
-    if consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
-        error.append("Esta consulta ja esta marcada. ")
-
-    else:
-        if not medico_available(medico, data_consulta, hora_consulta):
-            error.append("Medico ja tem uma consulta marcada para estas horas. ")
-
-        if not paciente_available(paciente, data_consulta, hora_consulta):
-            error.append("Paciente ja tem uma consulta marcada para estas horas. ")
-
-    if error:
-        return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
-    
-
-    id = get_next_consulta_id()
-    codigo_sns = generate_codigo_sns()
-
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             try:
                 cur.execute("BEGIN;")
                 # Lock the consulta table in ACCESS EXCLUSIVE mode
                 cur.execute("LOCK TABLE consulta IN ACCESS EXCLUSIVE MODE;")
+
+                error = []
+                if not check_clinica(clinica):
+                    error.append('Clinica invalida.')
+
+                if not paciente:
+                    error.append("Paciente is required.")
+                elif not check_paciente(paciente):
+                    error.append("Numero de ssn de paciente nao existe.")
+
+                if not medico:
+                    error.append("Medico is required.")
+                elif not check_medico(medico):
+                    error.append('Numero de nif de medico nao existe.')
+
+                if not data_consulta:
+                    error.append("Data de consulta is required.")
+
+                elif (not is_valid_date(data_consulta)):
+                    error.append("Formato data de consulta incorreto. Data tem de ser da forma YYYY-MM-DD. ")
+
+                if not hora_consulta:
+                    error.append("Hora de consulta is required.")
+
+                elif (not is_valid_hour(hora_consulta)):
+                    error.append("Formato hora de consulta incorreto. Hora tem de ser da forma HH-mm-ss. ")
+
+                consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
+                if consulta_datetime <= datetime.now():
+                    cur.execute("COMMIT;")
+                    error.append("A consulta deve ser marcada para um momento futuro.")
+                    return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
+
+                if not valid_working_time(hora_consulta):
+                    error.append("A consulta nao pode ser marcada a estas horas.")
+
+                if consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+                    error.append("Esta consulta ja esta marcada. ")
+
+                else:
+                    if not medico_available(medico, data_consulta, hora_consulta):
+                        error.append("Medico ja tem uma consulta marcada para estas horas. ")
+
+                    if not paciente_available(paciente, data_consulta, hora_consulta):
+                        error.append("Paciente ja tem uma consulta marcada para estas horas. ")
+
+                if error:
+                    cur.execute("COMMIT;")
+                    return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
+
+
+                id = get_next_consulta_id()
+                codigo_sns = generate_codigo_sns()
+
                 cur.execute(
                     """
                     INSERT INTO consulta (id, ssn, nif, nome, data, hora, codigo_sns)
@@ -270,48 +276,7 @@ def cancel_consulta(clinica):
     paciente = request.args.get("paciente")
     medico = request.args.get("medico")
     data_consulta = request.args.get("data")
-    hora_consulta = request.args.get("hora")
-
-    error = []
-    if not check_clinica(clinica):
-        error.append('Clinica invalida.')
-
-    if not paciente:
-        error.append("Paciente is required.")
-    elif not check_paciente(paciente):
-        error.append("Numero de ssn de paciente nao existe.")
-
-    if not medico:
-        error.append("Medico is required.")
-    elif not check_medico(medico):
-        error.append('Numero de nif de medico nao existe.')
-
-    if not data_consulta:
-        error.append("Data de consulta is required.")
-
-    elif (not is_valid_date(data_consulta)):
-        error.append("Formato data de consulta incorreto. Data tem de ser da forma YYYY-MM-DD. ")
-
-    if not hora_consulta:
-        error.append("Hora de consulta is required.")
-
-    elif (not is_valid_hour(hora_consulta)):
-        error.append("Formato hora de consulta incorreto. Hora tem de ser da forma HH-mm-ss. ")
-
-    consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
-    if consulta_datetime <= datetime.now():
-        error.append("A consulta deve estar marcada para um momento futuro.")
-        return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
-
-    if not valid_working_time(hora_consulta):
-        error.append("A consulta nao pode estar marcada para estas horas.")
-
-    if not consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
-        error.append("Nao existe nenhuma consulta a estas horas. ")
-
-    if error:
-        return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
-    
+    hora_consulta = request.args.get("hora")    
 
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
@@ -321,6 +286,48 @@ def cancel_consulta(clinica):
                 cur.execute("LOCK TABLE consulta IN ACCESS EXCLUSIVE MODE;")
                 cur.execute("LOCK TABLE receita IN ACCESS EXCLUSIVE MODE;")
                 cur.execute("LOCK TABLE observacao IN ACCESS EXCLUSIVE MODE;")
+
+                error = []
+                if not check_clinica(clinica):
+                    error.append('Clinica invalida.')
+
+                if not paciente:
+                    error.append("Paciente is required.")
+                elif not check_paciente(paciente):
+                    error.append("Numero de ssn de paciente nao existe.")
+
+                if not medico:
+                    error.append("Medico is required.")
+                elif not check_medico(medico):
+                    error.append('Numero de nif de medico nao existe.')
+
+                if not data_consulta:
+                    error.append("Data de consulta is required.")
+
+                elif (not is_valid_date(data_consulta)):
+                    error.append("Formato data de consulta incorreto. Data tem de ser da forma YYYY-MM-DD. ")
+
+                if not hora_consulta:
+                    error.append("Hora de consulta is required.")
+
+                elif (not is_valid_hour(hora_consulta)):
+                    error.append("Formato hora de consulta incorreto. Hora tem de ser da forma HH-mm-ss. ")
+
+                consulta_datetime = datetime.strptime(f"{data_consulta} {hora_consulta}", '%Y-%m-%d %H:%M:%S')
+                if consulta_datetime <= datetime.now():
+                    cur.execute("COMMIT;")
+                    error.append("A consulta deve estar marcada para um momento futuro.")
+                    return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
+
+                if not valid_working_time(hora_consulta):
+                    error.append("A consulta nao pode estar marcada para estas horas.")
+
+                if not consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
+                    error.append("Nao existe nenhuma consulta a estas horas. ")
+
+                if error:
+                    cur.execute("COMMIT;")
+                    return jsonify({'status': 'error', 'message': '  '.join(error)}), 400
 
                 codigo_sns, id = cur.execute(
                     '''
@@ -494,8 +501,6 @@ def consulta_exists(clinica, paciente, medico, data_consulta, hora_consulta):
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute("BEGIN;")
             
-            # Lock the consulta table in SHARE ROW EXCLUSIVE mode
-            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
             res = cur.execute(
                 """
                 SELECT 1
@@ -561,7 +566,6 @@ def medico_available(medico, data, hora):
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute("BEGIN;")
-            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
 
             cur.execute(
                 """
@@ -585,7 +589,6 @@ def paciente_available(paciente, data, hora):
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute("BEGIN;")
-            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
 
             cur.execute(
                 """
@@ -625,7 +628,6 @@ def generate_codigo_sns():
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute("BEGIN;")
-            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
             while True:
                 codigo_sns = ''.join(random.choices(string.digits, k=12))
                 
@@ -650,7 +652,6 @@ def get_next_consulta_id():
     with psycopg.connect(conninfo=DATABASE_URL) as conn:
         with conn.cursor(row_factory=namedtuple_row) as cur:
             cur.execute("BEGIN;")
-            cur.execute("LOCK TABLE consulta IN SHARE ROW EXCLUSIVE MODE;")
             max_id = cur.execute(
                 """
                 SELECT MAX(id) 
