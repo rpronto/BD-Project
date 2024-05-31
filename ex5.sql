@@ -1,38 +1,20 @@
 -- 1
 SELECT ssn
-FROM (
-    SELECT 
-        ssn,
-        MAX(proxima_data - data) AS max_intervalo
-    FROM
-        (SELECT 
-            ssn,
-            data,
-            LEAD(data) OVER (PARTITION BY ssn, chave ORDER BY data) AS proxima_data
-        FROM 
-            historial_paciente
-        WHERE
-            especialidade = 'ortopedia' AND tipo = 'observacao' AND valor IS NULL
-        )
-    WHERE proxima_data is not NULL
-    GROUP BY ssn
-) 
-GROUP BY ssn HAVING MAX(max_intervalo) >= ALL(
-    SELECT MAX(max_intervalo)
-    FROM (
-        SELECT 
-            MAX(proxima_data - data) AS max_intervalo
-        FROM
-            (SELECT 
-                ssn,
-                data,
-                LEAD(data) OVER (PARTITION BY ssn, chave ORDER BY data) AS proxima_data
-            FROM 
-                historial_paciente
-            WHERE
-                especialidade = 'ortopedia' AND tipo = 'observacao' AND valor IS NULL
-            )
-    )
+FROM historial_paciente
+WHERE
+    especialidade = 'ortopedia' 
+    AND tipo = 'observacao' 
+    AND valor IS NULL
+
+GROUP BY ssn , chave HAVING (MAX(data) - MIN(data)) >= ALL(
+    SELECT MAX(data) - MIN(data)
+    FROM historial_paciente
+    WHERE
+        especialidade = 'ortopedia' 
+        AND tipo = 'observacao' 
+        AND valor IS NULL
+    GROUP BY ssn, chave
+
 );
 
 
